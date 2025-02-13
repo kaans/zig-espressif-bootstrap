@@ -54,11 +54,8 @@ pub const Color = enum {
     }
 
     pub fn renderOptions(color: Color) std.zig.ErrorBundle.RenderOptions {
-        const ttyconf = get_tty_conf(color);
         return .{
-            .ttyconf = ttyconf,
-            .include_source_line = ttyconf != .no_color,
-            .include_reference_trace = ttyconf != .no_color,
+            .ttyconf = get_tty_conf(color),
         };
     }
 };
@@ -701,7 +698,7 @@ pub const EnvVar = enum {
     HOME,
 
     pub fn isSet(comptime ev: EnvVar) bool {
-        return std.process.hasEnvVarConstant(@tagName(ev));
+        return std.process.hasNonEmptyEnvVarConstant(@tagName(ev));
     }
 
     pub fn get(ev: EnvVar, arena: std.mem.Allocator) !?[]u8 {
@@ -748,7 +745,6 @@ pub const SimpleComptimeReason = enum(u32) {
     atomic_order,
     array_mul_factor,
     slice_cat_operand,
-    comptime_call_target,
     inline_call_target,
     generic_call_target,
     wasm_memory_index,
@@ -788,6 +784,7 @@ pub const SimpleComptimeReason = enum(u32) {
     // Miscellaneous reasons.
     comptime_keyword,
     comptime_call_modifier,
+    inline_loop_operand,
     switch_item,
     tuple_field_default_value,
     struct_field_default_value,
@@ -828,7 +825,6 @@ pub const SimpleComptimeReason = enum(u32) {
             .atomic_order         => "atomic order must be comptime-known",
             .array_mul_factor     => "array multiplication factor must be comptime-known",
             .slice_cat_operand    => "slice being concatenated must be comptime-known",
-            .comptime_call_target => "function being called at comptime must be comptime-known",
             .inline_call_target   => "function being called inline must be comptime-known",
             .generic_call_target  => "generic function being called must be comptime-known",
             .wasm_memory_index    => "wasm memory index must be comptime-known",
@@ -863,6 +859,7 @@ pub const SimpleComptimeReason = enum(u32) {
 
             .comptime_keyword             => "'comptime' keyword forces comptime evaluation",
             .comptime_call_modifier       => "'.compile_time' call modifier forces comptime evaluation",
+            .inline_loop_operand          => "inline loop condition must be comptime-known",
             .switch_item                  => "switch prong values must be comptime-known",
             .tuple_field_default_value    => "tuple field default value must be comptime-known",
             .struct_field_default_value   => "struct field default value must be comptime-known",

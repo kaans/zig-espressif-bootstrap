@@ -707,7 +707,7 @@ pub fn allocateSymbol(coff: *Coff) !u32 {
     try coff.locals.ensureUnusedCapacity(gpa, 1);
 
     const index = blk: {
-        if (coff.locals_free_list.popOrNull()) |index| {
+        if (coff.locals_free_list.pop()) |index| {
             log.debug("  (reusing symbol index {d})", .{index});
             break :blk index;
         } else {
@@ -735,7 +735,7 @@ fn allocateGlobal(coff: *Coff) !u32 {
     try coff.globals.ensureUnusedCapacity(gpa, 1);
 
     const index = blk: {
-        if (coff.globals_free_list.popOrNull()) |index| {
+        if (coff.globals_free_list.pop()) |index| {
             log.debug("  (reusing global index {d})", .{index});
             break :blk index;
         } else {
@@ -861,7 +861,7 @@ fn writeAtom(coff: *Coff, atom_index: Atom.Index, code: []u8) !void {
     try coff.pwriteAll(code, file_offset);
 
     // Now we can mark the relocs as resolved.
-    while (relocs.popOrNull()) |reloc| {
+    while (relocs.pop()) |reloc| {
         reloc.dirty = false;
     }
 }
@@ -1876,6 +1876,13 @@ fn linkWithLLD(coff: *Coff, arena: Allocator, tid: Zcu.PerThread.Id, prog_node: 
         if (comp.version) |version| {
             try argv.append(try allocPrint(arena, "-VERSION:{}.{}", .{ version.major, version.minor }));
         }
+
+        if (target_util.llvmMachineAbi(target)) |mabi| {
+            try argv.append(try allocPrint(arena, "-MLLVM:-target-abi={s}", .{mabi}));
+        }
+
+        try argv.append(try allocPrint(arena, "-MLLVM:-float-abi={s}", .{if (target.abi.floatAbi() == .hard) "hard" else "soft"}));
+
         if (comp.config.lto != .none) {
             switch (optimize_mode) {
                 .Debug => {},
@@ -2293,7 +2300,7 @@ fn flushModuleInner(coff: *Coff, arena: Allocator, tid: Zcu.PerThread.Id) !void 
         }
     }
 
-    while (coff.unresolved.popOrNull()) |entry| {
+    while (coff.unresolved.pop()) |entry| {
         assert(entry.value);
         const global = coff.globals.items[entry.key];
         const sym = coff.getSymbol(global);
@@ -3663,7 +3670,7 @@ const ImportTable = struct {
     fn addImport(itab: *ImportTable, allocator: Allocator, target: SymbolWithLoc) !ImportIndex {
         try itab.entries.ensureUnusedCapacity(allocator, 1);
         const index: u32 = blk: {
-            if (itab.free_list.popOrNull()) |index| {
+            if (itab.free_list.pop()) |index| {
                 log.debug("  (reusing import entry index {d})", .{index});
                 break :blk index;
             } else {

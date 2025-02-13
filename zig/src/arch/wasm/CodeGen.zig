@@ -1121,11 +1121,11 @@ fn allocLocal(cg: *CodeGen, ty: Type) InnerError!WValue {
     const zcu = cg.pt.zcu;
     const valtype = typeToValtype(ty, zcu, cg.target);
     const index_or_null = switch (valtype) {
-        .i32 => cg.free_locals_i32.popOrNull(),
-        .i64 => cg.free_locals_i64.popOrNull(),
-        .f32 => cg.free_locals_f32.popOrNull(),
-        .f64 => cg.free_locals_f64.popOrNull(),
-        .v128 => cg.free_locals_v128.popOrNull(),
+        .i32 => cg.free_locals_i32.pop(),
+        .i64 => cg.free_locals_i64.pop(),
+        .f32 => cg.free_locals_f32.pop(),
+        .f64 => cg.free_locals_f64.pop(),
+        .v128 => cg.free_locals_v128.pop(),
     };
     if (index_or_null) |index| {
         log.debug("reusing local ({d}) of type {}", .{ index, valtype });
@@ -1309,7 +1309,7 @@ fn functionInner(cg: *CodeGen, any_returns: bool) InnerError!Function {
     try cg.branches.append(cg.gpa, .{});
     // clean up outer branch
     defer {
-        var outer_branch = cg.branches.pop();
+        var outer_branch = cg.branches.pop().?;
         outer_branch.deinit(cg.gpa);
         assert(cg.branches.items.len == 0); // missing branch merge
     }
@@ -1591,10 +1591,35 @@ fn memcpy(cg: *CodeGen, dst: WValue, src: WValue, len: WValue) !void {
     // When bulk_memory is enabled, we lower it to wasm's memcpy instruction.
     // If not, we lower it ourselves manually
     if (std.Target.wasm.featureSetHas(cg.target.cpu.features, .bulk_memory)) {
+        const len0_ok = std.Target.wasm.featureSetHas(cg.target.cpu.features, .nontrapping_bulk_memory_len0);
+
+        if (!len0_ok) {
+            try cg.startBlock(.block, .empty);
+
+            // Even if `len` is zero, the spec requires an implementation to trap if `src + len` or
+            // `dst + len` are out of memory bounds. This can easily happen in Zig in a case such
+            // as:
+            //
+            // const dst: [*]u8 = undefined;
+            // const src: [*]u8 = undefined;
+            // var len: usize = runtime_zero();
+            // @memcpy(dst[0..len], src[0..len]);
+            //
+            // So explicitly avoid using `memory.copy` in the `len == 0` case. Lovely design.
+            try cg.emitWValue(len);
+            try cg.addTag(.i32_eqz);
+            try cg.addLabel(.br_if, 0);
+        }
+
         try cg.lowerToStack(dst);
         try cg.lowerToStack(src);
         try cg.emitWValue(len);
         try cg.addExtended(.memory_copy);
+
+        if (!len0_ok) {
+            try cg.endBlock();
+        }
+
         return;
     }
 
@@ -1901,7 +1926,6 @@ fn genInst(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
         .br => cg.airBr(inst),
         .repeat => cg.airRepeat(inst),
         .switch_dispatch => return cg.fail("TODO implement `switch_dispatch`", .{}),
-        .int_from_bool => cg.airIntFromBool(inst),
         .cond_br => cg.airCondBr(inst),
         .intcast => cg.airIntcast(inst),
         .fptrunc => cg.airFptrunc(inst),
@@ -1947,7 +1971,6 @@ fn genInst(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
         .ptr_sub => cg.airPtrBinOp(inst, .sub),
         .ptr_elem_ptr => cg.airPtrElemPtr(inst),
         .ptr_elem_val => cg.airPtrElemVal(inst),
-        .int_from_ptr => cg.airIntFromPtr(inst),
         .ret => cg.airRet(inst),
         .ret_safe => cg.airRet(inst), // TODO
         .ret_ptr => cg.airRetPtr(inst),
@@ -2059,6 +2082,7 @@ fn genInst(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
         .add_safe,
         .sub_safe,
         .mul_safe,
+        .intcast_safe,
         => return cg.fail("TODO implement safety_checked_instructions", .{}),
 
         .work_item_id,
@@ -3458,7 +3482,7 @@ fn airCondBr(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
         cg.branches.appendAssumeCapacity(.{});
         try cg.currentBranch().values.ensureUnusedCapacity(cg.gpa, @as(u32, @intCast(liveness_condbr.else_deaths.len)));
         defer {
-            var else_stack = cg.branches.pop();
+            var else_stack = cg.branches.pop().?;
             else_stack.deinit(cg.gpa);
         }
         try cg.genBody(else_body);
@@ -3470,7 +3494,7 @@ fn airCondBr(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
         cg.branches.appendAssumeCapacity(.{});
         try cg.currentBranch().values.ensureUnusedCapacity(cg.gpa, @as(u32, @intCast(liveness_condbr.then_deaths.len)));
         defer {
-            var then_stack = cg.branches.pop();
+            var then_stack = cg.branches.pop().?;
             then_stack.deinit(cg.gpa);
         }
         try cg.genBody(then_body);
@@ -3751,7 +3775,11 @@ fn airBitcast(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
             break :result try cg.wrapOperand(operand, wanted_ty);
         }
 
-        break :result cg.reuseOperand(ty_op.operand, operand);
+        break :result switch (operand) {
+            // for stack offset, return a pointer to this offset.
+            .stack_offset => try cg.buildPointerOffset(operand, 0, .new),
+            else => cg.reuseOperand(ty_op.operand, operand),
+        };
     };
     return cg.finishAir(inst, result, &.{ty_op.operand});
 }
@@ -4104,7 +4132,7 @@ fn airSwitchBr(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
         cg.branches.appendAssumeCapacity(.{});
         try cg.currentBranch().values.ensureUnusedCapacity(cg.gpa, liveness.deaths[index].len);
         defer {
-            var case_branch = cg.branches.pop();
+            var case_branch = cg.branches.pop().?;
             case_branch.deinit(cg.gpa);
         }
         try cg.genBody(case.body);
@@ -4116,7 +4144,7 @@ fn airSwitchBr(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
         const else_deaths = liveness.deaths.len - 1;
         try cg.currentBranch().values.ensureUnusedCapacity(cg.gpa, liveness.deaths[else_deaths].len);
         defer {
-            var else_branch = cg.branches.pop();
+            var else_branch = cg.branches.pop().?;
             else_branch.deinit(cg.gpa);
         }
         try cg.genBody(else_body);
@@ -4611,14 +4639,6 @@ fn trunc(cg: *CodeGen, operand: WValue, wanted_ty: Type, given_ty: Type) InnerEr
     return result;
 }
 
-fn airIntFromBool(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
-    const un_op = cg.air.instructions.items(.data)[@intFromEnum(inst)].un_op;
-    const operand = try cg.resolveInst(un_op);
-    const result = cg.reuseOperand(un_op, operand);
-
-    return cg.finishAir(inst, result, &.{un_op});
-}
-
 fn airArrayToSlice(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
     const zcu = cg.pt.zcu;
     const ty_op = cg.air.instructions.items(.data)[@intFromEnum(inst)].ty_op;
@@ -4640,21 +4660,6 @@ fn airArrayToSlice(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
     try cg.store(slice_local, .{ .imm32 = array_len }, Type.usize, cg.ptrSize());
 
     return cg.finishAir(inst, slice_local, &.{ty_op.operand});
-}
-
-fn airIntFromPtr(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
-    const zcu = cg.pt.zcu;
-    const un_op = cg.air.instructions.items(.data)[@intFromEnum(inst)].un_op;
-    const operand = try cg.resolveInst(un_op);
-    const ptr_ty = cg.typeOf(un_op);
-    const result = if (ptr_ty.isSlice(zcu))
-        try cg.slicePtr(operand)
-    else switch (operand) {
-        // for stack offset, return a pointer to this offset.
-        .stack_offset => try cg.buildPointerOffset(operand, 0, .new),
-        else => cg.reuseOperand(un_op, operand),
-    };
-    return cg.finishAir(inst, result, &.{un_op});
 }
 
 fn airPtrElemVal(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
@@ -4782,10 +4787,33 @@ fn memset(cg: *CodeGen, elem_ty: Type, ptr: WValue, len: WValue, value: WValue) 
     // When bulk_memory is enabled, we lower it to wasm's memset instruction.
     // If not, we lower it ourselves.
     if (std.Target.wasm.featureSetHas(cg.target.cpu.features, .bulk_memory) and abi_size == 1) {
+        const len0_ok = std.Target.wasm.featureSetHas(cg.target.cpu.features, .nontrapping_bulk_memory_len0);
+
+        if (!len0_ok) {
+            try cg.startBlock(.block, .empty);
+
+            // Even if `len` is zero, the spec requires an implementation to trap if `ptr + len` is
+            // out of memory bounds. This can easily happen in Zig in a case such as:
+            //
+            // const ptr: [*]u8 = undefined;
+            // var len: usize = runtime_zero();
+            // @memset(ptr[0..len], 42);
+            //
+            // So explicitly avoid using `memory.fill` in the `len == 0` case. Lovely design.
+            try cg.emitWValue(len);
+            try cg.addTag(.i32_eqz);
+            try cg.addLabel(.br_if, 0);
+        }
+
         try cg.lowerToStack(ptr);
         try cg.emitWValue(value);
         try cg.emitWValue(len);
         try cg.addExtended(.memory_fill);
+
+        if (!len0_ok) {
+            try cg.endBlock();
+        }
+
         return;
     }
 
@@ -6431,7 +6459,7 @@ fn lowerTry(
         try cg.branches.append(cg.gpa, .{});
         try cg.currentBranch().values.ensureUnusedCapacity(cg.gpa, liveness.else_deaths.len + liveness.then_deaths.len);
         defer {
-            var branch = cg.branches.pop();
+            var branch = cg.branches.pop().?;
             branch.deinit(cg.gpa);
         }
         try cg.genBody(body);

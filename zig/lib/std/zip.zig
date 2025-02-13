@@ -1,8 +1,8 @@
-/// The .ZIP File Format Specification is found here:
-///    https://pkwaredownloads.blob.core.windows.net/pem/APPNOTE.txt
-///
-/// Note that this file uses the abbreviation "cd" for "central directory"
-///
+//! The .ZIP File Format Specification is found here:
+//!    https://pkwaredownloads.blob.core.windows.net/pem/APPNOTE.txt
+//!
+//! Note that this file uses the abbreviation "cd" for "central directory"
+
 const builtin = @import("builtin");
 const std = @import("std");
 const testing = std.testing;
@@ -162,7 +162,7 @@ pub fn decompress(
     var total_uncompressed: u64 = 0;
     switch (method) {
         .store => {
-            var buf: [std.mem.page_size]u8 = undefined;
+            var buf: [4096]u8 = undefined;
             while (true) {
                 const len = try reader.read(&buf);
                 if (len == 0) break;

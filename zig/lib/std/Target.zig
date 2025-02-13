@@ -370,7 +370,7 @@ pub const Os = struct {
         range: std.SemanticVersion.Range,
         glibc: std.SemanticVersion,
         /// Android API level.
-        android: u32 = 14, // This default value is to be deleted after zig1.wasm is updated.
+        android: u32,
 
         pub inline fn includesVersion(range: LinuxVersionRange, ver: std.SemanticVersion) bool {
             return range.range.includesVersion(ver);
@@ -528,13 +528,13 @@ pub const Os = struct {
                 .freebsd => .{
                     .semver = .{
                         .min = .{ .major = 12, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 14, .minor = 1, .patch = 0 },
+                        .max = .{ .major = 14, .minor = 2, .patch = 0 },
                     },
                 },
                 .netbsd => .{
                     .semver = .{
                         .min = .{ .major = 8, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 10, .minor = 0, .patch = 0 },
+                        .max = .{ .major = 10, .minor = 1, .patch = 0 },
                     },
                 },
                 .openbsd => .{
@@ -553,31 +553,31 @@ pub const Os = struct {
                 .macos => .{
                     .semver = .{
                         .min = .{ .major = 13, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 15, .minor = 2, .patch = 0 },
+                        .max = .{ .major = 15, .minor = 3, .patch = 0 },
                     },
                 },
                 .ios => .{
                     .semver = .{
                         .min = .{ .major = 12, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 18, .minor = 1, .patch = 0 },
+                        .max = .{ .major = 18, .minor = 3, .patch = 0 },
                     },
                 },
                 .tvos => .{
                     .semver = .{
                         .min = .{ .major = 13, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 18, .minor = 1, .patch = 0 },
+                        .max = .{ .major = 18, .minor = 3, .patch = 0 },
                     },
                 },
                 .visionos => .{
                     .semver = .{
                         .min = .{ .major = 1, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 2, .minor = 1, .patch = 0 },
+                        .max = .{ .major = 2, .minor = 3, .patch = 0 },
                     },
                 },
                 .watchos => .{
                     .semver = .{
                         .min = .{ .major = 6, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 11, .minor = 1, .patch = 0 },
+                        .max = .{ .major = 11, .minor = 3, .patch = 0 },
                     },
                 },
 
@@ -597,7 +597,7 @@ pub const Os = struct {
                 .uefi => .{
                     .semver = .{
                         .min = .{ .major = 2, .minor = 0, .patch = 0 },
-                        .max = .{ .major = 2, .minor = 9, .patch = 0 },
+                        .max = .{ .major = 2, .minor = 11, .patch = 0 },
                     },
                 },
 
@@ -1240,13 +1240,10 @@ pub const Cpu = struct {
 
             /// Adds the specified feature set but not its dependencies.
             pub fn addFeatureSet(set: *Set, other_set: Set) void {
-                switch (builtin.zig_backend) {
-                    .stage2_x86_64 => {
-                        for (&set.ints, other_set.ints) |*set_int, other_set_int| set_int.* |= other_set_int;
-                    },
-                    else => {
-                        set.ints = @as(@Vector(usize_count, usize), set.ints) | @as(@Vector(usize_count, usize), other_set.ints);
-                    },
+                if (builtin.zig_backend == .stage2_x86_64 and builtin.object_format == .coff) {
+                    for (&set.ints, other_set.ints) |*set_int, other_set_int| set_int.* |= other_set_int;
+                } else {
+                    set.ints = @as(@Vector(usize_count, usize), set.ints) | @as(@Vector(usize_count, usize), other_set.ints);
                 }
             }
 
@@ -1259,13 +1256,10 @@ pub const Cpu = struct {
 
             /// Removes the specified feature but not its dependents.
             pub fn removeFeatureSet(set: *Set, other_set: Set) void {
-                switch (builtin.zig_backend) {
-                    .stage2_x86_64 => {
-                        for (&set.ints, other_set.ints) |*set_int, other_set_int| set_int.* &= ~other_set_int;
-                    },
-                    else => {
-                        set.ints = @as(@Vector(usize_count, usize), set.ints) & ~@as(@Vector(usize_count, usize), other_set.ints);
-                    },
+                if (builtin.zig_backend == .stage2_x86_64 and builtin.object_format == .coff) {
+                    for (&set.ints, other_set.ints) |*set_int, other_set_int| set_int.* &= ~other_set_int;
+                } else {
+                    set.ints = @as(@Vector(usize_count, usize), set.ints) & ~@as(@Vector(usize_count, usize), other_set.ints);
                 }
             }
 
@@ -1295,19 +1289,16 @@ pub const Cpu = struct {
             }
 
             pub fn isSuperSetOf(set: Set, other_set: Set) bool {
-                switch (builtin.zig_backend) {
-                    .stage2_x86_64 => {
-                        var result = true;
-                        for (&set.ints, other_set.ints) |*set_int, other_set_int|
-                            result = result and (set_int.* & other_set_int) == other_set_int;
-                        return result;
-                    },
-                    else => {
-                        const V = @Vector(usize_count, usize);
-                        const set_v: V = set.ints;
-                        const other_v: V = other_set.ints;
-                        return @reduce(.And, (set_v & other_v) == other_v);
-                    },
+                if (builtin.zig_backend == .stage2_x86_64 and builtin.object_format == .coff) {
+                    var result = true;
+                    for (&set.ints, other_set.ints) |*set_int, other_set_int|
+                        result = result and (set_int.* & other_set_int) == other_set_int;
+                    return result;
+                } else {
+                    const V = @Vector(usize_count, usize);
+                    const set_v: V = set.ints;
+                    const other_v: V = other_set.ints;
+                    return @reduce(.And, (set_v & other_v) == other_v);
                 }
             }
         };
@@ -1958,7 +1949,7 @@ pub const Cpu = struct {
                 .x86_64 => &x86.cpu.x86_64,
                 .nvptx, .nvptx64 => &nvptx.cpu.sm_20,
                 .ve => &ve.cpu.generic,
-                .wasm32, .wasm64 => &wasm.cpu.generic,
+                .wasm32, .wasm64 => &wasm.cpu.mvp,
                 .xcore => &xcore.cpu.generic,
                 .xtensa => &xtensa.cpu.generic,
 
@@ -2012,6 +2003,7 @@ pub const Cpu = struct {
                     else => generic(arch),
                 },
                 .xcore => &xcore.cpu.xs1b_generic,
+                .wasm32, .wasm64 => &wasm.cpu.lime1,
 
                 else => generic(arch),
             };

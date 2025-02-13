@@ -750,8 +750,7 @@ pub const File = struct {
         {
             const ti = ti_id.resolveFull(&pt.zcu.intern_pool).?;
             const file = pt.zcu.fileByIndex(ti.file);
-            assert(file.zir_loaded);
-            const inst = file.zir.instructions.get(@intFromEnum(ti.inst));
+            const inst = file.zir.?.instructions.get(@intFromEnum(ti.inst));
             assert(inst.tag == .declaration);
         }
 
@@ -1889,7 +1888,7 @@ pub fn resolveInputs(
     // that this library search logic can be applied to them.
     mem.reverse(UnresolvedInput, unresolved_inputs.items);
 
-    syslib: while (unresolved_inputs.popOrNull()) |unresolved_input| {
+    syslib: while (unresolved_inputs.pop()) |unresolved_input| {
         const name_query: UnresolvedInput.NameQuery = switch (unresolved_input) {
             .name_query => |nq| nq,
             .ambiguous_name => |an| an: {

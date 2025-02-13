@@ -305,6 +305,13 @@ pub const MAP = switch (native_arch) {
     else => @compileError("missing std.os.linux.MAP constants for this architecture"),
 };
 
+pub const MREMAP = packed struct(u32) {
+    MAYMOVE: bool = false,
+    FIXED: bool = false,
+    DONTUNMAP: bool = false,
+    _: u29 = 0,
+};
+
 pub const O = switch (native_arch) {
     .x86_64 => packed struct(u32) {
         ACCMODE: ACCMODE = .RDONLY,
@@ -608,11 +615,11 @@ pub inline fn vfork() usize {
     return @call(.always_inline, syscall0, .{.vfork});
 }
 
-pub fn futimens(fd: i32, times: *const [2]timespec) usize {
+pub fn futimens(fd: i32, times: ?*const [2]timespec) usize {
     return utimensat(fd, null, times, 0);
 }
 
-pub fn utimensat(dirfd: i32, path: ?[*:0]const u8, times: *const [2]timespec, flags: u32) usize {
+pub fn utimensat(dirfd: i32, path: ?[*:0]const u8, times: ?*const [2]timespec, flags: u32) usize {
     return syscall4(.utimensat, @as(usize, @bitCast(@as(isize, dirfd))), @intFromPtr(path), @intFromPtr(times), flags);
 }
 
@@ -854,7 +861,7 @@ pub fn readlinkat(dirfd: i32, noalias path: [*:0]const u8, noalias buf_ptr: [*]u
     return syscall4(.readlinkat, @as(usize, @bitCast(@as(isize, dirfd))), @intFromPtr(path), @intFromPtr(buf_ptr), buf_len);
 }
 
-pub fn mkdir(path: [*:0]const u8, mode: u32) usize {
+pub fn mkdir(path: [*:0]const u8, mode: mode_t) usize {
     if (@hasField(SYS, "mkdir")) {
         return syscall2(.mkdir, @intFromPtr(path), mode);
     } else {
@@ -862,7 +869,7 @@ pub fn mkdir(path: [*:0]const u8, mode: u32) usize {
     }
 }
 
-pub fn mkdirat(dirfd: i32, path: [*:0]const u8, mode: u32) usize {
+pub fn mkdirat(dirfd: i32, path: [*:0]const u8, mode: mode_t) usize {
     return syscall3(.mkdirat, @as(usize, @bitCast(@as(isize, dirfd))), @intFromPtr(path), mode);
 }
 
@@ -892,10 +899,6 @@ pub fn umount2(special: [*:0]const u8, flags: u32) usize {
 
 pub fn mmap(address: ?[*]u8, length: usize, prot: usize, flags: MAP, fd: i32, offset: i64) usize {
     if (@hasField(SYS, "mmap2")) {
-        // Make sure the offset is also specified in multiples of page size
-        if ((offset & (MMAP2_UNIT - 1)) != 0)
-            return @bitCast(-@as(isize, @intFromEnum(E.INVAL)));
-
         return syscall6(
             .mmap2,
             @intFromPtr(address),
@@ -932,6 +935,17 @@ pub fn mmap(address: ?[*]u8, length: usize, prot: usize, flags: MAP, fd: i32, of
 
 pub fn mprotect(address: [*]const u8, length: usize, protection: usize) usize {
     return syscall3(.mprotect, @intFromPtr(address), length, protection);
+}
+
+pub fn mremap(old_addr: ?[*]const u8, old_len: usize, new_len: usize, flags: MREMAP, new_addr: ?[*]const u8) usize {
+    return syscall5(
+        .mremap,
+        @intFromPtr(old_addr),
+        old_len,
+        new_len,
+        @as(u32, @bitCast(flags)),
+        @intFromPtr(new_addr),
+    );
 }
 
 pub const MSF = struct {
@@ -1759,6 +1773,14 @@ pub fn sigaddset(set: *sigset_t, sig: u6) void {
     (set.*)[@as(usize, @intCast(s)) / usize_bits] |= val;
 }
 
+pub fn sigdelset(set: *sigset_t, sig: u6) void {
+    const s = sig - 1;
+    // shift in musl: s&8*sizeof *set->__bits-1
+    const shift = @as(u5, @intCast(s & (usize_bits - 1)));
+    const val = @as(u32, @intCast(1)) << shift;
+    (set.*)[@as(usize, @intCast(s)) / usize_bits] ^= val;
+}
+
 pub fn sigismember(set: *const sigset_t, sig: u6) bool {
     const s = sig - 1;
     return ((set.*)[@as(usize, @intCast(s)) / usize_bits] & (@as(usize, @intCast(1)) << @intCast(s & (usize_bits - 1)))) != 0;
@@ -1868,6 +1890,17 @@ pub fn recvmsg(fd: i32, msg: *msghdr, flags: u32) usize {
     } else {
         return syscall3(.recvmsg, fd_usize, msg_usize, flags);
     }
+}
+
+pub fn recvmmsg(fd: i32, msgvec: ?[*]mmsghdr, vlen: u32, flags: u32, timeout: ?*timespec) usize {
+    return syscall5(
+        .recvmmsg,
+        @as(usize, @bitCast(@as(isize, fd))),
+        @intFromPtr(msgvec),
+        vlen,
+        flags,
+        @intFromPtr(timeout),
+    );
 }
 
 pub fn recvfrom(
@@ -2196,7 +2229,7 @@ pub fn eventfd(count: u32, flags: u32) usize {
     return syscall2(.eventfd2, count, flags);
 }
 
-pub fn timerfd_create(clockid: clockid_t, flags: TFD) usize {
+pub fn timerfd_create(clockid: timerfd_clockid_t, flags: TFD) usize {
     return syscall2(
         .timerfd_create,
         @intFromEnum(clockid),
@@ -4677,8 +4710,35 @@ pub const clockid_t = enum(u32) {
     BOOTTIME = 7,
     REALTIME_ALARM = 8,
     BOOTTIME_ALARM = 9,
-    SGI_CYCLE = 10,
-    TAI = 11,
+    // In the linux kernel header file (time.h) is the following note:
+    // * The driver implementing this got removed. The clock ID is kept as a
+    // * place holder. Do not reuse!
+    // Therefore, calling clock_gettime() with these IDs will result in an error.
+    //
+    // Some backgrond:
+    // - SGI_CYCLE was for Silicon Graphics (SGI) workstations,
+    // which are probably no longer in use, so it makes sense to disable
+    // - TAI_CLOCK was designed as CLOCK_REALTIME(UTC) + tai_offset,
+    // but tai_offset was always 0 in the kernel.
+    // So there is no point in using this clock.
+    // SGI_CYCLE = 10,
+    // TAI = 11,
+    _,
+};
+
+// For use with posix.timerfd_create()
+// Actually, the parameter for the timerfd_create() function is in integer,
+// which means that the developer has to figure out which value is appropriate.
+// To make this easier and, above all, safer, because an incorrect value leads
+// to a panic, an enum is introduced which only allows the values
+// that actually work.
+pub const TIMERFD_CLOCK = timerfd_clockid_t;
+pub const timerfd_clockid_t = enum(u32) {
+    REALTIME = 0,
+    MONOTONIC = 1,
+    BOOTTIME = 7,
+    REALTIME_ALARM = 8,
+    BOOTTIME_ALARM = 9,
     _,
 };
 

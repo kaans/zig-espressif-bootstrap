@@ -16,12 +16,11 @@ const stack_size = 46 * 1024 * 1024;
 
 pub fn build(b: *std.Build) !void {
     const only_c = b.option(bool, "only-c", "Translate the Zig compiler to C code, with only the C backend enabled") orelse false;
-    const target = t: {
-        var default_target: std.Target.Query = .{};
-        default_target.ofmt = b.option(std.Target.ObjectFormat, "ofmt", "Object format to target") orelse if (only_c) .c else null;
-        break :t b.standardTargetOptions(.{ .default_target = default_target });
-    };
-
+    const target = b.standardTargetOptions(.{
+        .default_target = .{
+            .ofmt = if (only_c) .c else null,
+        },
+    });
     const optimize = b.standardOptimizeOption(.{});
 
     const flat = b.option(bool, "flat", "Put files into the installation prefix in a manner suited for upstream distribution rather than a posix file system hierarchy standard") orelse false;
@@ -172,7 +171,7 @@ pub fn build(b: *std.Build) !void {
     const tracy_callstack = b.option(bool, "tracy-callstack", "Include callstack information with Tracy data. Does nothing if -Dtracy is not provided") orelse (tracy != null);
     const tracy_allocation = b.option(bool, "tracy-allocation", "Include allocation information with Tracy data. Does nothing if -Dtracy is not provided") orelse (tracy != null);
     const tracy_callstack_depth: u32 = b.option(u32, "tracy-callstack-depth", "Declare callstack depth for Tracy data. Does nothing if -Dtracy_callstack is not provided") orelse 10;
-    const force_gpa = b.option(bool, "force-gpa", "Force the compiler to use GeneralPurposeAllocator") orelse false;
+    const debug_gpa = b.option(bool, "debug-allocator", "Force the compiler to use DebugAllocator") orelse false;
     const link_libc = b.option(bool, "force-link-libc", "Force self-hosted compiler to link libc") orelse (enable_llvm or only_c);
     const sanitize_thread = b.option(bool, "sanitize-thread", "Enable thread-sanitization") orelse false;
     const strip = b.option(bool, "strip", "Omit debug information");
@@ -234,7 +233,7 @@ pub fn build(b: *std.Build) !void {
     exe_options.addOption(bool, "llvm_has_csky", llvm_has_csky);
     exe_options.addOption(bool, "llvm_has_arc", llvm_has_arc);
     exe_options.addOption(bool, "llvm_has_xtensa", llvm_has_xtensa);
-    exe_options.addOption(bool, "force_gpa", force_gpa);
+    exe_options.addOption(bool, "debug_gpa", debug_gpa);
     exe_options.addOption(DevEnv, "dev", b.option(DevEnv, "dev", "Build a compiler with a reduced feature set for development of specific features") orelse if (only_c) .bootstrap else .full);
     exe_options.addOption(ValueInterpretMode, "value_interpret_mode", value_interpret_mode);
 
@@ -407,7 +406,7 @@ pub fn build(b: *std.Build) !void {
     const optimization_modes = chosen_opt_modes_buf[0..chosen_mode_index];
 
     const fmt_include_paths = &.{ "lib", "src", "test", "tools", "build.zig", "build.zig.zon" };
-    const fmt_exclude_paths = &.{"test/cases"};
+    const fmt_exclude_paths = &.{ "test/cases", "test/behavior/zon" };
     const do_fmt = b.addFmt(.{
         .paths = fmt_include_paths,
         .exclude_paths = fmt_exclude_paths,
@@ -451,7 +450,7 @@ pub fn build(b: *std.Build) !void {
         .skip_non_native = skip_non_native,
         .skip_libc = skip_libc,
         .use_llvm = use_llvm,
-        .max_rss = 1 * 1024 * 1024 * 1024,
+        .max_rss = 2 * 1024 * 1024 * 1024,
     }));
 
     test_modules_step.dependOn(tests.addModuleTests(b, .{
@@ -514,8 +513,8 @@ pub fn build(b: *std.Build) !void {
         .skip_non_native = skip_non_native,
         .skip_libc = skip_libc,
         .use_llvm = use_llvm,
-        // I observed a value of 4572626944 on the M2 CI.
-        .max_rss = 5029889638,
+        // I observed a value of 5136793600 on the M2 CI.
+        .max_rss = 5368709120,
     }));
 
     const unit_tests_step = b.step("test-unit", "Run the compiler source unit tests");
@@ -594,15 +593,14 @@ pub fn build(b: *std.Build) !void {
 fn addWasiUpdateStep(b: *std.Build, version: [:0]const u8) !void {
     const semver = try std.SemanticVersion.parse(version);
 
-    var target_query: std.Target.Query = .{
-        .cpu_arch = .wasm32,
-        .os_tag = .wasi,
-    };
-    target_query.cpu_features_add.addFeature(@intFromEnum(std.Target.wasm.Feature.bulk_memory));
-
     const exe = addCompilerStep(b, .{
         .optimize = .ReleaseSmall,
-        .target = b.resolveTargetQuery(target_query),
+        .target = b.resolveTargetQuery(std.Target.Query.parse(.{
+            .arch_os_abi = "wasm32-wasi",
+            // * `extended_const` is not supported by the `wasm-opt` version in CI.
+            // * `nontrapping_bulk_memory_len0` is supported by `wasm2c`.
+            .cpu_features = "baseline-extended_const+nontrapping_bulk_memory_len0",
+        }) catch unreachable),
     });
 
     const exe_options = b.addOptions();
@@ -610,7 +608,7 @@ fn addWasiUpdateStep(b: *std.Build, version: [:0]const u8) !void {
 
     exe_options.addOption(u32, "mem_leak_frames", 0);
     exe_options.addOption(bool, "have_llvm", false);
-    exe_options.addOption(bool, "force_gpa", false);
+    exe_options.addOption(bool, "debug_gpa", false);
     exe_options.addOption([:0]const u8, "version", version);
     exe_options.addOption(std.SemanticVersion, "semver", semver);
     exe_options.addOption(bool, "enable_debug_extensions", false);
@@ -644,6 +642,8 @@ fn addWasiUpdateStep(b: *std.Build, version: [:0]const u8) !void {
         "wasm-opt",
         "-Oz",
         "--enable-bulk-memory",
+        "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
         "--enable-sign-ext",
     });
     run_opt.addArtifactArg(exe);
@@ -791,24 +791,19 @@ fn addCmakeCfgOptionsToExe(
                 if (target.abi != .msvc) mod.link_libcpp = true;
             },
             .freebsd => {
-                if (static) {
-                    try addCxxKnownPath(b, cfg, exe, b.fmt("libc++.{s}", .{lib_suffix}), null, need_cpp_includes);
-                    try addCxxKnownPath(b, cfg, exe, b.fmt("libgcc_eh.{s}", .{lib_suffix}), null, need_cpp_includes);
-                } else {
-                    try addCxxKnownPath(b, cfg, exe, b.fmt("libc++.{s}", .{lib_suffix}), null, need_cpp_includes);
-                }
+                try addCxxKnownPath(b, cfg, exe, b.fmt("libc++.{s}", .{lib_suffix}), null, need_cpp_includes);
+                if (static) try addCxxKnownPath(b, cfg, exe, b.fmt("libgcc_eh.{s}", .{lib_suffix}), null, need_cpp_includes);
             },
             .openbsd => {
-                try addCxxKnownPath(b, cfg, exe, b.fmt("libc++.{s}", .{lib_suffix}), null, need_cpp_includes);
-                try addCxxKnownPath(b, cfg, exe, b.fmt("libc++abi.{s}", .{lib_suffix}), null, need_cpp_includes);
+                // - llvm requires libexecinfo which has conflicting symbols with libc++abi
+                // - only an issue with .a linking
+                // - workaround is to link c++abi dynamically
+                try addCxxKnownPath(b, cfg, exe, b.fmt("libc++.{s}", .{target.dynamicLibSuffix()[1..]}), null, need_cpp_includes);
+                try addCxxKnownPath(b, cfg, exe, b.fmt("libc++abi.{s}", .{target.dynamicLibSuffix()[1..]}), null, need_cpp_includes);
             },
             .netbsd, .dragonfly => {
-                if (static) {
-                    try addCxxKnownPath(b, cfg, exe, b.fmt("libstdc++.{s}", .{lib_suffix}), null, need_cpp_includes);
-                    try addCxxKnownPath(b, cfg, exe, b.fmt("libgcc_eh.{s}", .{lib_suffix}), null, need_cpp_includes);
-                } else {
-                    try addCxxKnownPath(b, cfg, exe, b.fmt("libstdc++.{s}", .{lib_suffix}), null, need_cpp_includes);
-                }
+                try addCxxKnownPath(b, cfg, exe, b.fmt("libstdc++.{s}", .{lib_suffix}), null, need_cpp_includes);
+                if (static) try addCxxKnownPath(b, cfg, exe, b.fmt("libgcc_eh.{s}", .{lib_suffix}), null, need_cpp_includes);
             },
             .solaris, .illumos => {
                 try addCxxKnownPath(b, cfg, exe, b.fmt("libstdc++.{s}", .{lib_suffix}), null, need_cpp_includes);
