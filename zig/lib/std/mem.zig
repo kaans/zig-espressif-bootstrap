@@ -1098,12 +1098,12 @@ pub fn indexOfSentinel(comptime T: type, comptime sentinel: T, p: [*:sentinel]co
             // as we don't read into a new page. This should be the case for most architectures
             // which use paged memory, however should be confirmed before adding a new arch below.
             .aarch64, .x86, .x86_64 => if (std.simd.suggestVectorLength(T)) |block_len| {
-                const page_size = std.heap.pageSize();
+                const page_size = std.heap.page_size_min;
                 const block_size = @sizeOf(T) * block_len;
                 const Block = @Vector(block_len, T);
                 const mask: Block = @splat(sentinel);
 
-                comptime assert(std.heap.page_size_max % @sizeOf(Block) == 0);
+                comptime assert(std.heap.page_size_min % @sizeOf(Block) == 0);
                 assert(page_size % @sizeOf(Block) == 0);
 
                 // First block may be unaligned
@@ -1119,6 +1119,7 @@ pub fn indexOfSentinel(comptime T: type, comptime sentinel: T, p: [*:sentinel]co
 
                     i += @divExact(std.mem.alignForward(usize, start_addr, block_size) - start_addr, @sizeOf(T));
                 } else {
+                    @branchHint(.unlikely);
                     // Would read over a page boundary. Per-byte at a time until aligned or found.
                     // 0.39% chance this branch is taken for 4K pages at 16b block length.
                     //
@@ -1152,7 +1153,7 @@ pub fn indexOfSentinel(comptime T: type, comptime sentinel: T, p: [*:sentinel]co
 test "indexOfSentinel vector paths" {
     const Types = [_]type{ u8, u16, u32, u64 };
     const allocator = std.testing.allocator;
-    const page_size = std.heap.pageSize();
+    const page_size = std.heap.page_size_min;
 
     inline for (Types) |T| {
         const block_len = std.simd.suggestVectorLength(T) orelse continue;
@@ -1611,6 +1612,8 @@ test count {
 /// Returns true if the haystack contains expected_count or more needles
 /// needle.len must be > 0
 /// does not count overlapping needles
+//
+/// See also: `containsAtLeastScalar`
 pub fn containsAtLeast(comptime T: type, haystack: []const T, expected_count: usize, needle: []const T) bool {
     assert(needle.len > 0);
     if (expected_count == 0) return true;
@@ -1640,6 +1643,34 @@ test containsAtLeast {
 
     try testing.expect(containsAtLeast(u8, "   radar      radar   ", 2, "radar"));
     try testing.expect(!containsAtLeast(u8, "   radar      radar   ", 3, "radar"));
+}
+
+/// Returns true if the haystack contains expected_count or more needles
+//
+/// See also: `containsAtLeast`
+pub fn containsAtLeastScalar(comptime T: type, haystack: []const T, expected_count: usize, needle: T) bool {
+    if (expected_count == 0) return true;
+
+    var found: usize = 0;
+
+    for (haystack) |item| {
+        if (item == needle) {
+            found += 1;
+            if (found == expected_count) return true;
+        }
+    }
+
+    return false;
+}
+
+test containsAtLeastScalar {
+    try testing.expect(containsAtLeastScalar(u8, "aa", 0, 'a'));
+    try testing.expect(containsAtLeastScalar(u8, "aa", 1, 'a'));
+    try testing.expect(containsAtLeastScalar(u8, "aa", 2, 'a'));
+    try testing.expect(!containsAtLeastScalar(u8, "aa", 3, 'a'));
+
+    try testing.expect(containsAtLeastScalar(u8, "adadda", 3, 'd'));
+    try testing.expect(!containsAtLeastScalar(u8, "adadda", 4, 'd'));
 }
 
 /// Reads an integer from memory with size equal to bytes.len.
@@ -4605,11 +4636,6 @@ test "read/write(Var)PackedInt" {
         // LLVM backend fails with "too many locals: locals exceed maximum"
         .wasm32, .wasm64 => return error.SkipZigTest,
         else => {},
-    }
-
-    if (builtin.cpu.arch == .powerpc) {
-        // https://github.com/ziglang/zig/issues/16951
-        return error.SkipZigTest;
     }
 
     const foreign_endian: Endian = if (native_endian == .big) .little else .big;

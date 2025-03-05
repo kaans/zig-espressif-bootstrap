@@ -11,7 +11,7 @@ const assert = std.debug.assert;
 const DevEnv = @import("src/dev.zig").Env;
 const ValueInterpretMode = enum { direct, by_name };
 
-const zig_version: std.SemanticVersion = .{ .major = 0, .minor = 14, .patch = 0 };
+const zig_version: std.SemanticVersion = .{ .major = 0, .minor = 15, .patch = 0 };
 const stack_size = 46 * 1024 * 1024;
 
 pub fn build(b: *std.Build) !void {
@@ -742,7 +742,7 @@ fn addCmakeCfgOptionsToExe(
     const mod = exe.root_module;
     const target = mod.resolved_target.?.result;
 
-    if (target.isDarwin()) {
+    if (target.os.tag.isDarwin()) {
         // useful for package maintainers
         exe.headerpad_max_install_names = true;
     }

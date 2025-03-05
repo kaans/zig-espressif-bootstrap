@@ -42,9 +42,7 @@ pub var next_mmap_addr_hint: ?[*]align(page_size_min) u8 = null;
 ///
 /// On many systems, the actual page size can only be determined at runtime
 /// with `pageSize`.
-pub const page_size_min: usize = std.options.page_size_min orelse (page_size_min_default orelse if (builtin.os.tag == .freestanding or builtin.os.tag == .other)
-    @compileError("freestanding/other page_size_min must provided with std.options.page_size_min")
-else
+pub const page_size_min: usize = std.options.page_size_min orelse (page_size_min_default orelse
     @compileError(@tagName(builtin.cpu.arch) ++ "-" ++ @tagName(builtin.os.tag) ++ " has unknown page_size_min; populate std.options.page_size_min"));
 
 /// comptime-known maximum page size of the target.
@@ -348,7 +346,7 @@ pub const page_allocator: Allocator = if (@hasDecl(root, "os") and
     @hasDecl(root.os, "heap") and
     @hasDecl(root.os.heap, "page_allocator"))
     root.os.heap.page_allocator
-else if (builtin.target.isWasm()) .{
+else if (builtin.target.cpu.arch.isWasm()) .{
     .ptr = undefined,
     .vtable = &WasmAllocator.vtable,
 } else if (builtin.target.os.tag == .plan9) .{
@@ -508,7 +506,7 @@ test PageAllocator {
     const allocator = page_allocator;
     try testAllocator(allocator);
     try testAllocatorAligned(allocator);
-    if (!builtin.target.isWasm()) {
+    if (!builtin.target.cpu.arch.isWasm()) {
         try testAllocatorLargeAlignment(allocator);
         try testAllocatorAlignedShrink(allocator);
     }
@@ -831,8 +829,10 @@ const page_size_min_default: ?usize = switch (builtin.os.tag) {
         .xtensa => 4 << 10,
         else => null,
     },
-    .freestanding => switch (builtin.cpu.arch) {
+    .freestanding, .other => switch (builtin.cpu.arch) {
         .wasm32, .wasm64 => 64 << 10,
+        .x86, .x86_64 => 4 << 10,
+        .aarch64, .aarch64_be => 4 << 10,
         else => null,
     },
     else => null,
@@ -989,7 +989,8 @@ test {
     _ = GeneralPurposeAllocator;
     _ = FixedBufferAllocator;
     _ = ThreadSafeAllocator;
-    if (builtin.target.isWasm()) {
+    _ = SbrkAllocator;
+    if (builtin.target.cpu.arch.isWasm()) {
         _ = WasmAllocator;
     }
     if (!builtin.single_threaded) _ = smp_allocator;
