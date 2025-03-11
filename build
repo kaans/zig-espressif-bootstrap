@@ -59,8 +59,8 @@ cmake "$ROOTDIR/llvm" \
   -DCLANG_TOOL_LIBCLANG_BUILD=OFF
 cmake --build . --target install
 
-Now we build Zig, still with system C/C++ compiler, linking against LLVM,
-Clang, LLD we just built from source.
+# Now we build Zig, still with system C/C++ compiler, linking against LLVM,
+# Clang, LLD we just built from source.
 mkdir -p "$ROOTDIR/out/build-zig-host"
 cd "$ROOTDIR/out/build-zig-host"
 cmake "$ROOTDIR/zig" \
