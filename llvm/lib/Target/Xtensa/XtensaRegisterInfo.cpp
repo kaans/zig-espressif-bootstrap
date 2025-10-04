@@ -11,10 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "XtensaRegisterInfo.h"
+#include "MCTargetDesc/XtensaMCTargetDesc.h"
 #include "XtensaInstrInfo.h"
 #include "XtensaMachineFunctionInfo.h"
 #include "XtensaSubtarget.h"
-#include "XtensaUtils.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -89,8 +89,6 @@ bool XtensaRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   int MinCSFI = 0;
   int MaxCSFI = -1;
 
-  assert(RS && "Need register scavenger");
-
   if (CSI.size()) {
     MinCSFI = CSI[0].getFrameIdx();
     MaxCSFI = CSI[CSI.size() - 1].getFrameIdx();
@@ -120,7 +118,7 @@ bool XtensaRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       SPOffset + (int64_t)StackSize + MI.getOperand(FIOperandNum + 1).getImm();
 
   uint64_t Alignment = MF.getFrameInfo().getObjectAlign(FrameIndex).value();
-  bool Valid = isValidAddrOffset(MI, Offset);
+  bool Valid = Xtensa::isValidAddrOffsetForOpcode(MI.getOpcode(), Offset);
 
   // If MI is not a debug value, make sure Offset fits in the 16-bit immediate
   // field.
@@ -147,6 +145,7 @@ bool XtensaRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   const XtensaInstrInfo &TII = *static_cast<const XtensaInstrInfo *>(
       MBB.getParent()->getSubtarget().getInstrInfo());
   unsigned BRegBase = Xtensa::B0;
+
   switch (MI.getOpcode()) {
   case Xtensa::SPILL_BOOL: {
     Register TempAR =

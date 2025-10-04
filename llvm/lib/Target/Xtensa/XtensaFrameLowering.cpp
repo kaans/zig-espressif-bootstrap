@@ -29,7 +29,7 @@ XtensaFrameLowering::XtensaFrameLowering(const XtensaSubtarget &STI)
                           Align(4)),
       TII(*STI.getInstrInfo()), TRI(STI.getRegisterInfo()) {}
 
-bool XtensaFrameLowering::hasFP(const MachineFunction &MF) const {
+bool XtensaFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
          MFI.hasVarSizedObjects();
@@ -51,7 +51,7 @@ void XtensaFrameLowering::emitPrologue(MachineFunction &MF,
   MCRegister SP = Xtensa::SP;
   MCRegister FP = TRI->getFrameRegister(MF);
   const MCRegisterInfo *MRI = MF.getContext().getRegisterInfo();
-  XtensaFunctionInfo *XtensaFI = MF.getInfo<XtensaFunctionInfo>();
+  XtensaMachineFunctionInfo *XtensaFI = MF.getInfo<XtensaMachineFunctionInfo>();
 
   // First, compute final stack size.
   uint64_t StackSize = MFI.getStackSize();
@@ -405,5 +405,31 @@ void XtensaFrameLowering::processFunctionBeforeFrameFinalized(
     for (int i = 0; i <= NeedRegs; i++)
       RS->addScavengingFrameIndex(
           MFI.CreateStackObject(Size, Alignment, false));
+    return;
+  }
+  // Set scavenging frame index if necessary.
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  uint64_t MaxSPOffset = MFI.estimateStackSize(MF);
+  auto *XtensaFI = MF.getInfo<XtensaMachineFunctionInfo>();
+  unsigned ScavSlotsNum = 0;
+
+  if (!isInt<12>(MaxSPOffset))
+    ScavSlotsNum = 1;
+
+  // Far branches over 18-bit offset require a spill slot for scratch register.
+  bool IsLargeFunction = !isInt<18>(MF.estimateFunctionSizeInBytes());
+  if (IsLargeFunction)
+    ScavSlotsNum = std::max(ScavSlotsNum, 1u);
+
+  const TargetRegisterClass &RC = Xtensa::ARRegClass;
+  unsigned Size = TRI->getSpillSize(RC);
+  Align Alignment = TRI->getSpillAlign(RC);
+  for (unsigned I = 0; I < ScavSlotsNum; I++) {
+    int FI = MFI.CreateSpillStackObject(Size, Alignment);
+    RS->addScavengingFrameIndex(FI);
+
+    if (IsLargeFunction &&
+        XtensaFI->getBranchRelaxationScratchFrameIndex() == -1)
+      XtensaFI->setBranchRelaxationScratchFrameIndex(FI);
   }
 }

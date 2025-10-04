@@ -17,12 +17,10 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstPrinter.h"
-#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/FormattedStream.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
@@ -75,7 +73,7 @@ void RISCVInstPrinter::printInst(const MCInst *MI, uint64_t Address,
   printAnnotation(O, Annot);
 }
 
-void RISCVInstPrinter::printRegName(raw_ostream &O, MCRegister Reg) const {
+void RISCVInstPrinter::printRegName(raw_ostream &O, MCRegister Reg) {
   markup(O, Markup::Register) << getRegisterName(Reg);
 }
 
@@ -123,6 +121,8 @@ void RISCVInstPrinter::printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
   unsigned Imm = MI->getOperand(OpNo).getImm();
   auto Range = RISCVSysReg::lookupSysRegByEncoding(Imm);
   for (auto &Reg : Range) {
+    if (Reg.IsAltName || Reg.IsDeprecatedName)
+      continue;
     if (Reg.haveRequiredFeatures(STI.getFeatureBits())) {
       markup(O, Markup::Register) << Reg.Name;
       return;
@@ -265,8 +265,6 @@ void RISCVInstPrinter::printRegReg(const MCInst *MI, unsigned OpNo,
   const MCOperand &MO = MI->getOperand(OpNo);
 
   assert(MO.isReg() && "printRegReg can only print register operands");
-  if (MO.getReg() == RISCV::NoRegister)
-    return;
   printRegName(O, MO.getReg());
 
   O << "(";
@@ -415,6 +413,19 @@ void RISCVInstPrinter::printOffset_256_16_AsmOperand(const MCInst *MI,
   } else {
     printOperand(MI, OpNum, STI, O);
   }
+}
+
+void RISCVInstPrinter::printOffset_256_2_AsmOperand(const MCInst *MI, int OpNum,
+  const MCSubtargetInfo &STI,
+  raw_ostream &O) {
+if (MI->getOperand(OpNum).isImm()) {
+int64_t Value = MI->getOperand(OpNum).getImm();
+assert((Value >= -256 && Value <= 254 && (Value & 0x1) == 0) &&
+       "Invalid argument, value must be in range [-256,254], first 1 bits "
+       "should be zero");
+O << Value;
+} else
+printOperand(MI, OpNum, STI, O);
 }
 
 void RISCVInstPrinter::printOffset_256_4_AsmOperand(const MCInst *MI, int OpNum,

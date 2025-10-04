@@ -494,8 +494,8 @@ static bool tryAddingSymbolicOperand(int64_t Value, bool isBranch,
                                      uint64_t InstSize, MCInst &MI,
                                      const void *Decoder) {
   const MCDisassembler *Dis = static_cast<const MCDisassembler *>(Decoder);
-  return Dis->tryAddingSymbolicOperand(MI, Value, Address, isBranch, Offset, /*OpSize=*/0,
-                                       InstSize);
+  return Dis->tryAddingSymbolicOperand(MI, Value, Address, isBranch, Offset,
+                                       /*OpSize=*/0, InstSize);
 }
 
 static DecodeStatus decodeCallOperand(MCInst &Inst, uint64_t Imm,
@@ -854,7 +854,7 @@ static DecodeStatus readInstruction16(ArrayRef<uint8_t> Bytes, uint64_t Address,
   }
 
   if (!IsLittleEndian) {
-    llvm_unreachable("Big-endian mode currently is not supported!");
+    report_fatal_error("Big-endian mode currently is not supported!");
   } else {
     Insn = (Bytes[1] << 8) | Bytes[0];
   }

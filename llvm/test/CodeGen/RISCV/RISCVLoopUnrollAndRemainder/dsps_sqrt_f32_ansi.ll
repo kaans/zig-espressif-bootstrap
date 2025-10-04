@@ -151,11 +151,11 @@ define dso_local noundef i32 @dsps_sqrt_f32_ansi(ptr noundef readonly %input, pt
 ; CHECK-NEXT:    br i1 [[EXITCOND_NOT]], label [[RETURN]], label [[FOR_BODY]]
 ; CHECK:       for.body.clone:
 ; CHECK-NEXT:    [[I_012_CLONE:%.*]] = phi i32 [ [[INC_CLONE:%.*]], [[FOR_BODY_CLONE]] ], [ 0, [[FOR_COND_PREHEADER]] ]
-; CHECK-NEXT:    [[ARRAYIDX_CLONE:%.*]] = getelementptr inbounds float, ptr [[INPUT]], i32 [[I_012_CLONE]]
+; CHECK-NEXT:    [[ARRAYIDX_CLONE:%.*]] = getelementptr inbounds nuw float, ptr [[INPUT]], i32 [[I_012_CLONE]]
 ; CHECK-NEXT:    [[TMP49:%.*]] = load i32, ptr [[ARRAYIDX_CLONE]], align 4
 ; CHECK-NEXT:    [[SHR_I_CLONE:%.*]] = ashr i32 [[TMP49]], 1
 ; CHECK-NEXT:    [[ADD_I_CLONE:%.*]] = add nsw i32 [[SHR_I_CLONE]], 532365312
-; CHECK-NEXT:    [[ARRAYIDX5_CLONE:%.*]] = getelementptr inbounds float, ptr [[OUTPUT]], i32 [[I_012_CLONE]]
+; CHECK-NEXT:    [[ARRAYIDX5_CLONE:%.*]] = getelementptr inbounds nuw float, ptr [[OUTPUT]], i32 [[I_012_CLONE]]
 ; CHECK-NEXT:    store i32 [[ADD_I_CLONE]], ptr [[ARRAYIDX5_CLONE]], align 4
 ; CHECK-NEXT:    [[INC_CLONE]] = add nuw nsw i32 [[I_012_CLONE]], 1
 ; CHECK-NEXT:    [[EXITCOND_NOT_CLONE:%.*]] = icmp eq i32 [[INC_CLONE]], [[LEN]]

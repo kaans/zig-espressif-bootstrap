@@ -17,6 +17,7 @@
 #include "XtensaTargetObjectFile.h"
 #include "XtensaTargetTransformInfo.h"
 #include "TargetInfo/XtensaTargetInfo.h"
+#include "XtensaMachineFunctionInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
@@ -66,10 +67,11 @@ XtensaTargetMachine::XtensaTargetMachine(const Target &T, const Triple &TT,
                                          std::optional<CodeModel::Model> CM,
                                          CodeGenOptLevel OL, bool JIT,
                                          bool IsLittle)
-    : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, IsLittle), TT,
-                        CPU, FS, Options, getEffectiveRelocModel(JIT, RM),
-                        getEffectiveCodeModel(CM, CodeModel::Small), OL),
-      TLOF(createTLOF()) {
+    : CodeGenTargetMachineImpl(T, computeDataLayout(TT, CPU, Options, IsLittle),
+                               TT, CPU, FS, Options,
+                               getEffectiveRelocModel(JIT, RM),
+                               getEffectiveCodeModel(CM, CodeModel::Small), OL),
+      TLOF(std::make_unique<TargetLoweringObjectFileELF>()) {
   initAsmInfo();
 }
 
@@ -108,7 +110,8 @@ XtensaTargetMachine::getTargetTransformInfo(const Function &F) const {
 MachineFunctionInfo *XtensaTargetMachine::createMachineFunctionInfo(
     BumpPtrAllocator &Allocator, const Function &F,
     const TargetSubtargetInfo *STI) const {
-  return XtensaFunctionInfo::create<XtensaFunctionInfo>(Allocator, F, STI);
+  return XtensaMachineFunctionInfo::create<XtensaMachineFunctionInfo>(Allocator,
+                                                                      F, STI);
 }
 
 namespace {

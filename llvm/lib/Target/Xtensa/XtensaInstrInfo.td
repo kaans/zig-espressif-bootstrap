@@ -768,7 +768,7 @@ class ArithLogic_RRRN<bits<4> oper0, string instrAsm,
       SDPatternOperator opNode, bit isComm = 0>
   : RRRN_Inst<oper0, (outs AR:$r), (ins AR:$s, AR:$t),
               instrAsm#"\t$r, $s, $t",
-             [(set AR:$r, (opNode AR:$s, AR:$t))]>, Requires<[HasDensity]> {
+             [(set AR:$r, (opNode AR:$s, AR:$t))]> {
   let isCommutable = isComm;
   let isReMaterializable = 0;
 }
@@ -787,6 +787,33 @@ def ADDI_N : RRRN_Inst<0x0B, (outs AR:$r), (ins AR:$s, imm1n_15:$imm),
 
 def : InstAlias<"_addi.n\t$r, $s, $imm", (ADDI_N AR:$r, AR:$s, imm1n_15:$imm)>;
 
+// Conditional branch instructions.
+let isBranch = 1, isTerminator = 1 in {
+  def BEQZ_N : RI6_Inst<0xC, 0x1, 0x0, (outs), (ins AR:$s, brtarget:$target),
+                       "beqz.n\t$s, $target", []>, Requires<[HasDensity]> {
+    bits<6> target;
+
+    let imm6 = target;
+  }
+
+  def BNEZ_N : RI6_Inst<0xC, 0x1, 0x1, (outs), (ins AR:$s, brtarget:$target),
+                       "bnez.n\t$s, $target", []>, Requires<[HasDensity]> {
+    bits<6> target;
+
+    let imm6 = target;
+  }
+}
+
+def : InstAlias<"_beqz.n\t$s, $target", (BEQZ_N AR:$s, brtarget:$target)>, Requires<[HasDensity]>;
+def : InstAlias<"_bnez.n\t$s, $target", (BNEZ_N AR:$s, brtarget:$target)>, Requires<[HasDensity]>;
+
+def ILL_N : RRRN_Inst<0x0D, (outs), (ins),
+                     "ill.n", []>, Requires<[HasDensity]> {
+  let r = 0xF;
+  let s = 0x0;
+  let t = 0x6;
+}
+
 def MOV_N : RRRN_Inst<0x0D, (outs AR:$t), (ins AR:$s),
                      "mov.n\t$t, $s", []>, Requires<[HasDensity]> {
   let r = 0;
@@ -800,6 +827,13 @@ def MOVI_N : RI7_Inst<0xc, 0x0, (outs AR:$s), (ins imm32n_95:$imm7),
                      [(set AR:$s, imm32n_95:$imm7)]>, Requires<[HasDensity]>;
 
 def : InstAlias<"_movi.n\t$s, $imm7", (MOVI_N AR:$s, imm32n_95:$imm7)>;
+
+def NOP_N : RRRN_Inst<0x0D, (outs), (ins),
+                     "nop.n", []>, Requires<[HasDensity]> {
+  let r = 0xF;
+  let s = 0x0;
+  let t = 0x3;
+}
 
 // Load instruction
 let mayLoad = 1, usesCustomInserter = 1 in {
@@ -1795,13 +1829,6 @@ let isBarrier = 1, isTerminator = 1 in {
     let n = 0x0;
     let r = 0;
     let s = 0;
-  }
-
-  def ILL_N : RRRN_Inst<0x0D, (outs), (ins),
-                       "ill.n", []>, Requires<[HasDensity]> {
-    let r = 0xf;
-    let s = 0x0;
-    let t = 0x6;
   }
 }
 

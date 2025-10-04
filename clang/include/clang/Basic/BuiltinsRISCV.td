@@ -148,3 +148,8 @@ def ntl_store : RISCVBuiltin<"void(...)">;
 } // Features = "zihintntl", Attributes = [CustomTypeChecking]
 
 include "BuiltinsRISCVESP32P4.td"
+
+//===----------------------------------------------------------------------===//
+// XCV extensions.
+//===----------------------------------------------------------------------===//
+include "clang/Basic/BuiltinsRISCVXCV.td"
