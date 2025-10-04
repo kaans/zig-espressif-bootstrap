@@ -68,7 +68,7 @@ pub fn main() !void {
             const arg = args[i];
             if (mem.startsWith(u8, arg, "-")) {
                 if (mem.eql(u8, arg, "-h") or mem.eql(u8, arg, "--help")) {
-                    const stdout = std.io.getStdOut().writer();
+                    const stdout = std.fs.File.stdout().deprecatedWriter();
                     try stdout.writeAll(usage);
                     return std.process.cleanExit();
                 } else if (mem.eql(u8, arg, "--")) {
@@ -114,10 +114,10 @@ pub fn main() !void {
     interestingness_argv.appendAssumeCapacity(checker_path);
     interestingness_argv.appendSliceAssumeCapacity(argv);
 
-    var rendered = std.ArrayList(u8).init(gpa);
+    var rendered = std.array_list.Managed(u8).init(gpa);
     defer rendered.deinit();
 
-    var astgen_input = std.ArrayList(u8).init(gpa);
+    var astgen_input = std.array_list.Managed(u8).init(gpa);
     defer astgen_input.deinit();
 
     var tree = try parse(gpa, root_source_file_path);
@@ -161,7 +161,7 @@ pub fn main() !void {
     // result, restart the whole process, reparsing the AST and re-generating the list
     // of all possible transformations and shuffling it again.
 
-    var transformations = std.ArrayList(Walk.Transformation).init(gpa);
+    var transformations = std.array_list.Managed(Walk.Transformation).init(gpa);
     defer transformations.deinit();
     try Walk.findTransformations(arena, &tree, &transformations);
     sortTransformations(transformations.items, rng.random());
@@ -220,7 +220,7 @@ pub fn main() !void {
                             mem.eql(u8, msg, "unused function parameter") or
                             mem.eql(u8, msg, "unused capture"))
                         {
-                            const ident_token = item.data.token;
+                            const ident_token = item.data.token.unwrap().?;
                             try more_fixups.unused_var_decls.put(gpa, ident_token, {});
                         } else {
                             std.debug.print("found other ZIR error: '{s}'\n", .{msg});
@@ -382,7 +382,7 @@ fn transformationsToFixups(
                 }
             }
 
-            var other_source = std.ArrayList(u8).init(gpa);
+            var other_source = std.array_list.Managed(u8).init(gpa);
             defer other_source.deinit();
             try other_source.appendSlice("struct {\n");
             try other_file_ast.renderToArrayList(&other_source, inlined_fixups);
@@ -403,7 +403,7 @@ fn parse(gpa: Allocator, file_path: []const u8) !Ast {
         file_path,
         std.math.maxInt(u32),
         null,
-        1,
+        .fromByteUnits(1),
         0,
     ) catch |err| {
         fatal("unable to open '{s}': {s}", .{ file_path, @errorName(err) });

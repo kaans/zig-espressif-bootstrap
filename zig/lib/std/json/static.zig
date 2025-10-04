@@ -2,13 +2,13 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
-const ArrayList = std.ArrayList;
+const ArrayList = std.array_list.Managed;
 
-const Scanner = @import("./scanner.zig").Scanner;
-const Token = @import("./scanner.zig").Token;
-const AllocWhen = @import("./scanner.zig").AllocWhen;
-const default_max_value_len = @import("./scanner.zig").default_max_value_len;
-const isNumberFormattedLikeAnInteger = @import("./scanner.zig").isNumberFormattedLikeAnInteger;
+const Scanner = @import("Scanner.zig");
+const Token = Scanner.Token;
+const AllocWhen = Scanner.AllocWhen;
+const default_max_value_len = Scanner.default_max_value_len;
+const isNumberFormattedLikeAnInteger = Scanner.isNumberFormattedLikeAnInteger;
 
 const Value = @import("./dynamic.zig").Value;
 const Array = @import("./dynamic.zig").Array;
@@ -595,7 +595,7 @@ pub fn innerParseFromValue(
 
             switch (source) {
                 .float => return error.InvalidEnumTag,
-                .integer => |i| return std.meta.intToEnum(T, i),
+                .integer => |i| return std.enums.fromInt(T, i) orelse return error.InvalidEnumTag,
                 .number_string, .string => |s| return sliceToEnum(T, s),
                 else => return error.UnexpectedToken,
             }
@@ -780,7 +780,7 @@ fn sliceToEnum(comptime T: type, slice: []const u8) !T {
     // Check for a numeric value.
     if (!isNumberFormattedLikeAnInteger(slice)) return error.InvalidEnumTag;
     const n = std.fmt.parseInt(@typeInfo(T).@"enum".tag_type, slice, 10) catch return error.InvalidEnumTag;
-    return std.meta.intToEnum(T, n);
+    return std.enums.fromInt(T, n) orelse return error.InvalidEnumTag;
 }
 
 fn fillDefaultStructValues(comptime T: type, r: *T, fields_seen: *[@typeInfo(T).@"struct".fields.len]bool) !void {
