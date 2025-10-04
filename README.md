@@ -19,10 +19,10 @@ end with a fully operational Zig compiler for any target.
 This repository copies sources from upstream. Patches listed below. Use git
 to find and inspect the patch diffs.
 
- * LLVM, LLD, Clang 19.1.2 ([espressif fork](https://github.com/espressif/llvm-project))
+ * LLVM, LLD, Clang 20.1.1 ([espressif fork](https://github.com/espressif/llvm-project))
  * zlib 1.3.1
  * zstd 1.5.2
- * zig 0.14.0
+ * zig 0.15.1
 
 For other versions, check the git tags of this repository.
 
