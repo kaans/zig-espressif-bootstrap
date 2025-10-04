@@ -5,7 +5,7 @@ if(NOT DEFINED LLVM_COMMON_CMAKE_UTILS)
   set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
 endif()
 include(${LLVM_COMMON_CMAKE_UTILS}/Modules/CMakePolicy.cmake
-  NO_POLICY_SCOPE)
+        NO_POLICY_SCOPE)
 
 # If we are not building as a part of LLVM, build LLD as an
 # standalone project, using LLVM as an external library:
@@ -33,7 +33,7 @@ if(LLD_BUILT_STANDALONE)
   set(LLVM_MAIN_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../llvm" CACHE PATH "Path to LLVM source tree")
 
   find_program(LLVM_TABLEGEN_EXE "llvm-tblgen" ${LLVM_TOOLS_BINARY_DIR}
-    NO_DEFAULT_PATH)
+          NO_DEFAULT_PATH)
 
   # They are used as destination of target generators.
   set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)
@@ -52,11 +52,11 @@ if(LLD_BUILT_STANDALONE)
 
   if(LLVM_INCLUDE_TESTS)
     find_package(Python3 ${LLVM_MINIMUM_PYTHON_VERSION} REQUIRED
-      COMPONENTS Interpreter)
+            COMPONENTS Interpreter)
 
     # Check prebuilt llvm/utils.
     if(EXISTS ${LLVM_TOOLS_BINARY_DIR}/FileCheck${CMAKE_EXECUTABLE_SUFFIX}
-        AND EXISTS ${LLVM_TOOLS_BINARY_DIR}/not${CMAKE_EXECUTABLE_SUFFIX})
+            AND EXISTS ${LLVM_TOOLS_BINARY_DIR}/not${CMAKE_EXECUTABLE_SUFFIX})
       set(LLVM_UTILS_PROVIDED ON)
     endif()
 
@@ -76,9 +76,9 @@ if(LLD_BUILT_STANDALONE)
     else()
       # Seek installed Lit.
       find_program(LLVM_EXTERNAL_LIT
-                   NAMES llvm-lit lit.py lit
-                   PATHS "${LLVM_MAIN_SRC_DIR}/utils/lit"
-                   DOC "Path to lit.py")
+              NAMES llvm-lit lit.py lit
+              PATHS "${LLVM_MAIN_SRC_DIR}/utils/lit"
+              DOC "Path to lit.py")
     endif()
 
     if(LLVM_EXTERNAL_LIT)
@@ -103,7 +103,7 @@ if(LLD_BUILT_STANDALONE)
 endif() # standalone
 
 set(LLD_TOOLS_INSTALL_DIR "${CMAKE_INSTALL_BINDIR}" CACHE PATH
-    "Path for binary subdirectory (defaults to '${CMAKE_INSTALL_BINDIR}')")
+        "Path for binary subdirectory (defaults to '${CMAKE_INSTALL_BINDIR}')")
 mark_as_advanced(LLD_TOOLS_INSTALL_DIR)
 
 set(LLD_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -111,7 +111,7 @@ set(LLD_INCLUDE_DIR ${LLD_SOURCE_DIR}/include )
 set(LLD_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
 set(LLD_VENDOR ${PACKAGE_VENDOR} CACHE STRING
-  "Vendor-specific text for showing with version information.")
+        "Vendor-specific text for showing with version information.")
 
 if(LLD_VENDOR)
   add_definitions(-DLLD_VENDOR="${LLD_VENDOR}")
@@ -119,39 +119,39 @@ endif()
 
 # Compute the LLD version from the LLVM version.
 string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" LLD_VERSION
-  ${PACKAGE_VERSION})
+        ${PACKAGE_VERSION})
 message(STATUS "LLD version: ${LLD_VERSION}")
 
 string(REGEX REPLACE "([0-9]+)\\.[0-9]+(\\.[0-9]+)?" "\\1" LLD_VERSION_MAJOR
-  ${LLD_VERSION})
+        ${LLD_VERSION})
 string(REGEX REPLACE "[0-9]+\\.([0-9]+)(\\.[0-9]+)?" "\\1" LLD_VERSION_MINOR
-  ${LLD_VERSION})
+        ${LLD_VERSION})
 
 # Configure the Version.inc file.
 configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/include/lld/Common/Version.inc.in
-  ${CMAKE_CURRENT_BINARY_DIR}/include/lld/Common/Version.inc)
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/lld/Common/Version.inc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/include/lld/Common/Version.inc)
 
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   message(FATAL_ERROR "In-source builds are not allowed. CMake would overwrite "
-"the makefiles distributed with LLVM. Please create a directory and run cmake "
-"from there, passing the path to this source directory as the last argument. "
-"This process created the file `CMakeCache.txt' and the directory "
-"`CMakeFiles'. Please delete them.")
+          "the makefiles distributed with LLVM. Please create a directory and run cmake "
+          "from there, passing the path to this source directory as the last argument. "
+          "This process created the file `CMakeCache.txt' and the directory "
+          "`CMakeFiles'. Please delete them.")
 endif()
 
 # Add path for custom modules.
 list(INSERT CMAKE_MODULE_PATH 0
-  "${LLD_SOURCE_DIR}/cmake/modules"
-  "${LLVM_COMMON_CMAKE_UTILS}/Modules"
-  )
+        "${LLD_SOURCE_DIR}/cmake/modules"
+        "${LLVM_COMMON_CMAKE_UTILS}/Modules"
+)
 
 include(AddLLD)
 
 option(LLD_USE_VTUNE
-       "Enable VTune user task tracking."
-       OFF)
+        "Enable VTune user task tracking."
+        OFF)
 if (LLD_USE_VTUNE)
   find_package(VTune)
   if (VTUNE_FOUND)
@@ -162,10 +162,10 @@ if (LLD_USE_VTUNE)
 endif()
 
 option(LLD_BUILD_TOOLS
-  "Build the lld tools. If OFF, just generate build targets." ON)
+        "Build the lld tools. If OFF, just generate build targets." ON)
 
 option(LLD_DEFAULT_LD_LLD_IS_MINGW
-    "Use MinGW as the default backend for ld.lld. If OFF, ELF will be used." OFF)
+        "Use MinGW as the default backend for ld.lld. If OFF, ELF will be used." OFF)
 if (LLD_DEFAULT_LD_LLD_IS_MINGW)
   add_definitions("-DLLD_DEFAULT_LD_LLD_IS_MINGW=1")
 endif()
@@ -176,20 +176,23 @@ if (MSVC)
 endif()
 
 include_directories(BEFORE
-  ${CMAKE_CURRENT_BINARY_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  )
+        ${CMAKE_CURRENT_BINARY_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../zig/lib/libunwind/include
+)
 
 if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
   install(DIRECTORY include/
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    FILES_MATCHING
-    PATTERN "*.h"
-    )
+          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+          FILES_MATCHING
+          PATTERN "*.h"
+  )
 endif()
 
 add_subdirectory(Common)
-add_subdirectory(tools/lld)
+if(LLD_BUILD_TOOLS)
+  add_subdirectory(tools/lld)
+endif()
 
 if (LLVM_INCLUDE_TESTS)
   add_custom_target(LLDUnitTests)
@@ -200,7 +203,6 @@ if (LLVM_INCLUDE_TESTS)
   add_subdirectory(test)
 endif()
 
-add_subdirectory(docs)
 add_subdirectory(COFF)
 add_subdirectory(ELF)
 add_subdirectory(MachO)
