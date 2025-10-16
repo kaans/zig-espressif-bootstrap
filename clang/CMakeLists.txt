@@ -5,7 +5,7 @@ if(NOT DEFINED LLVM_COMMON_CMAKE_UTILS)
   set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
 endif()
 include(${LLVM_COMMON_CMAKE_UTILS}/Modules/CMakePolicy.cmake
-        NO_POLICY_SCOPE)
+  NO_POLICY_SCOPE)
 
 # If we are not building as a part of LLVM, build Clang as an
 # standalone project, using LLVM as an external library:
@@ -17,9 +17,9 @@ endif()
 # Make sure that our source directory is on the current cmake module path so that
 # we can include cmake files from this directory.
 list(INSERT CMAKE_MODULE_PATH 0
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules"
-        "${LLVM_COMMON_CMAKE_UTILS}/Modules"
-)
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules"
+  "${LLVM_COMMON_CMAKE_UTILS}/Modules"
+  )
 
 # Must go below project(..)
 include(GNUInstallDirs)
@@ -32,7 +32,7 @@ if(CLANG_BUILT_STANDALONE)
 
   if(NOT MSVC_IDE)
     set(LLVM_ENABLE_ASSERTIONS ${ENABLE_ASSERTIONS}
-            CACHE BOOL "Enable assertions")
+      CACHE BOOL "Enable assertions")
     # Assertions should follow llvm-config's.
     mark_as_advanced(LLVM_ENABLE_ASSERTIONS)
   endif()
@@ -48,7 +48,7 @@ if(CLANG_BUILT_STANDALONE)
   set(LLVM_LIBRARY_DIR "${LLVM_LIBRARY_DIR}" CACHE PATH "Path to llvm/lib")
 
   find_program(LLVM_TABLEGEN_EXE "llvm-tblgen" ${LLVM_TOOLS_BINARY_DIR}
-          NO_DEFAULT_PATH)
+    NO_DEFAULT_PATH)
 
   # They are used as destination of target generators.
   set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)
@@ -61,10 +61,10 @@ if(CLANG_BUILT_STANDALONE)
   endif()
 
   option(LLVM_INSTALL_TOOLCHAIN_ONLY
-          "Only include toolchain files in the 'install' target." OFF)
+    "Only include toolchain files in the 'install' target." OFF)
 
   option(LLVM_FORCE_USE_OLD_TOOLCHAIN
-          "Set to ON to force using an old, unsupported host toolchain." OFF)
+    "Set to ON to force using an old, unsupported host toolchain." OFF)
   option(CLANG_ENABLE_BOOTSTRAP "Generate the clang bootstrap target" OFF)
   option(LLVM_ENABLE_LIBXML2 "Use libxml2 if available." ON)
 
@@ -78,7 +78,7 @@ if(CLANG_BUILT_STANDALONE)
 
   set(PACKAGE_VERSION "${LLVM_PACKAGE_VERSION}")
   set(BUG_REPORT_URL "${LLVM_PACKAGE_BUGREPORT}" CACHE STRING
-          "Default URL where bug reports are to be submitted.")
+    "Default URL where bug reports are to be submitted.")
 
   if (NOT DEFINED LLVM_INCLUDE_TESTS)
     set(LLVM_INCLUDE_TESTS ON)
@@ -92,21 +92,21 @@ if(CLANG_BUILT_STANDALONE)
   set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib${LLVM_LIBDIR_SUFFIX} )
 
   find_package(Python3 ${LLVM_MINIMUM_PYTHON_VERSION} REQUIRED
-          COMPONENTS Interpreter)
+    COMPONENTS Interpreter)
 
   if(LLVM_INCLUDE_TESTS)
     # Check prebuilt llvm/utils.
     if(EXISTS ${LLVM_TOOLS_BINARY_DIR}/FileCheck${CMAKE_EXECUTABLE_SUFFIX}
-            AND EXISTS ${LLVM_TOOLS_BINARY_DIR}/count${CMAKE_EXECUTABLE_SUFFIX}
-            AND EXISTS ${LLVM_TOOLS_BINARY_DIR}/not${CMAKE_EXECUTABLE_SUFFIX})
+        AND EXISTS ${LLVM_TOOLS_BINARY_DIR}/count${CMAKE_EXECUTABLE_SUFFIX}
+        AND EXISTS ${LLVM_TOOLS_BINARY_DIR}/not${CMAKE_EXECUTABLE_SUFFIX})
       set(LLVM_UTILS_PROVIDED ON)
     endif()
 
     # Seek installed Lit.
     find_program(LLVM_LIT
-            NAMES llvm-lit lit.py lit
-            PATHS "${LLVM_MAIN_SRC_DIR}/utils/lit"
-            DOC "Path to lit.py")
+                 NAMES llvm-lit lit.py lit
+                 PATHS "${LLVM_MAIN_SRC_DIR}/utils/lit"
+                 DOC "Path to lit.py")
 
     if(EXISTS ${LLVM_MAIN_SRC_DIR}/utils/lit/lit.py)
       # Note: path not really used, except for checking if lit was found
@@ -123,7 +123,7 @@ if(CLANG_BUILT_STANDALONE)
     endif()
 
     if (NOT TARGET llvm_gtest)
-      message(FATAL_ERROR "llvm-gtest not found. Please install llvm-gtest or disable tests with -DLLVM_INCLUDE_TESTS=OFF")
+        message(FATAL_ERROR "llvm-gtest not found. Please install llvm-gtest or disable tests with -DLLVM_INCLUDE_TESTS=OFF")
     endif()
 
     if(LLVM_LIT)
@@ -152,7 +152,7 @@ endif() # standalone
 # This allows disabling clang's XML dependency even if LLVM finds libxml2.
 # By default, clang depends on libxml2 if LLVM does.
 option(CLANG_ENABLE_LIBXML2 "Whether libclang may depend on libxml2"
-        ${LLVM_ENABLE_LIBXML2})
+       ${LLVM_ENABLE_LIBXML2})
 
 if(CLANG_ENABLE_LIBXML2)
   # Don't look for libxml if we're using MSan, since uninstrumented third party
@@ -169,11 +169,11 @@ endif()
 if(CLANG_ENABLE_CIR)
   if (CLANG_BUILT_STANDALONE)
     message(FATAL_ERROR
-            "ClangIR is not yet supported in the standalone build.")
+      "ClangIR is not yet supported in the standalone build.")
   endif()
   if (NOT "${LLVM_ENABLE_PROJECTS}" MATCHES "MLIR|mlir")
     message(FATAL_ERROR
-            "Cannot build ClangIR without MLIR in LLVM_ENABLE_PROJECTS")
+      "Cannot build ClangIR without MLIR in LLVM_ENABLE_PROJECTS")
   endif()
 endif()
 
@@ -198,60 +198,60 @@ if( CLANG_HAVE_DLFCN_H )
 endif()
 
 set(CLANG_RESOURCE_DIR "" CACHE STRING
-        "Relative directory from the Clang binary to its resource files.")
+  "Relative directory from the Clang binary to its resource files.")
 
 set(C_INCLUDE_DIRS "" CACHE STRING
-        "Colon separated list of directories clang will search for headers.")
+  "Colon separated list of directories clang will search for headers.")
 
 set(USE_DEPRECATED_GCC_INSTALL_PREFIX OFF CACHE BOOL "Temporary workaround before GCC_INSTALL_PREFIX is completely removed")
 set(GCC_INSTALL_PREFIX "" CACHE PATH "Directory where gcc is installed." )
 set(DEFAULT_SYSROOT "" CACHE STRING
-        "Default <path> to all compiler invocations for --sysroot=<path>." )
+  "Default <path> to all compiler invocations for --sysroot=<path>." )
 if(GCC_INSTALL_PREFIX AND NOT USE_DEPRECATED_GCC_INSTALL_PREFIX)
   message(FATAL_ERROR "GCC_INSTALL_PREFIX is deprecated and will be removed. Use "
-          "configuration files (https://clang.llvm.org/docs/UsersManual.html#configuration-files)"
-          "to specify the default --gcc-install-dir= or --gcc-triple=. --gcc-toolchain= is discouraged. "
-          "See https://github.com/llvm/llvm-project/pull/77537 for detail.")
+    "configuration files (https://clang.llvm.org/docs/UsersManual.html#configuration-files)"
+    "to specify the default --gcc-install-dir= or --gcc-triple=. --gcc-toolchain= is discouraged. "
+    "See https://github.com/llvm/llvm-project/pull/77537 for detail.")
 endif()
 
 set(ENABLE_LINKER_BUILD_ID OFF CACHE BOOL "pass --build-id to ld")
 
 set(ENABLE_X86_RELAX_RELOCATIONS ON CACHE BOOL
-        "enable x86 relax relocations by default")
+    "enable x86 relax relocations by default")
 
 set(PPC_LINUX_DEFAULT_IEEELONGDOUBLE OFF CACHE BOOL
-        "Enable IEEE binary128 as default long double format on PowerPC Linux.")
+    "Enable IEEE binary128 as default long double format on PowerPC Linux.")
 
 set(CLANG_SPAWN_CC1 OFF CACHE BOOL
-        "Whether clang should use a new process for the CC1 invocation")
+    "Whether clang should use a new process for the CC1 invocation")
 
 option(CLANG_DEFAULT_PIE_ON_LINUX "Default to -fPIE and -pie on linux-gnu" ON)
 
 set(CLANG_DEFAULT_LINKER "" CACHE STRING
-        "Default linker to use (linker name or absolute path, empty for platform default)")
+  "Default linker to use (linker name or absolute path, empty for platform default)")
 
 set(CLANG_DEFAULT_CXX_STDLIB "" CACHE STRING
-        "Default C++ stdlib to use (\"libstdc++\" or \"libc++\", empty for platform default")
+  "Default C++ stdlib to use (\"libstdc++\" or \"libc++\", empty for platform default")
 if (NOT(CLANG_DEFAULT_CXX_STDLIB STREQUAL "" OR
         CLANG_DEFAULT_CXX_STDLIB STREQUAL "libstdc++" OR
         CLANG_DEFAULT_CXX_STDLIB STREQUAL "libc++"))
   message(WARNING "Resetting default C++ stdlib to use platform default")
   set(CLANG_DEFAULT_CXX_STDLIB "" CACHE STRING
-          "Default C++ stdlib to use (\"libstdc++\" or \"libc++\", empty for platform default" FORCE)
+    "Default C++ stdlib to use (\"libstdc++\" or \"libc++\", empty for platform default" FORCE)
 endif()
 
 set(CLANG_DEFAULT_RTLIB "" CACHE STRING
-        "Default runtime library to use (\"libgcc\" or \"compiler-rt\", empty for platform default)")
+  "Default runtime library to use (\"libgcc\" or \"compiler-rt\", empty for platform default)")
 if (NOT(CLANG_DEFAULT_RTLIB STREQUAL "" OR
         CLANG_DEFAULT_RTLIB STREQUAL "libgcc" OR
         CLANG_DEFAULT_RTLIB STREQUAL "compiler-rt"))
   message(WARNING "Resetting default rtlib to use platform default")
   set(CLANG_DEFAULT_RTLIB "" CACHE STRING
-          "Default runtime library to use (\"libgcc\" or \"compiler-rt\", empty for platform default)" FORCE)
+    "Default runtime library to use (\"libgcc\" or \"compiler-rt\", empty for platform default)" FORCE)
 endif()
 
 set(CLANG_DEFAULT_UNWINDLIB "" CACHE STRING
-        "Default unwind library to use (\"none\" \"libgcc\" or \"libunwind\", empty to match runtime library.)")
+  "Default unwind library to use (\"none\" \"libgcc\" or \"libunwind\", empty to match runtime library.)")
 if (CLANG_DEFAULT_UNWINDLIB STREQUAL "")
   if (CLANG_DEFAULT_RTLIB STREQUAL "libgcc")
     set (CLANG_DEFAULT_UNWINDLIB "libgcc" CACHE STRING "" FORCE)
@@ -264,46 +264,46 @@ if (NOT(CLANG_DEFAULT_UNWINDLIB STREQUAL "" OR
         CLANG_DEFAULT_UNWINDLIB STREQUAL "libunwind"))
   message(WARNING "Resetting default unwindlib to use platform default")
   set(CLANG_DEFAULT_UNWINDLIB "" CACHE STRING
-          "Default unwind library to use (\"none\" \"libgcc\" or \"libunwind\", empty to match runtime library.)" FORCE)
+    "Default unwind library to use (\"none\" \"libgcc\" or \"libunwind\", empty to match runtime library.)" FORCE)
 endif()
 
 set(CLANG_DEFAULT_OBJCOPY "objcopy" CACHE STRING
-        "Default objcopy executable to use.")
+  "Default objcopy executable to use.")
 
 set(CLANG_DEFAULT_OPENMP_RUNTIME "libomp" CACHE STRING
-        "Default OpenMP runtime used by -fopenmp.")
+  "Default OpenMP runtime used by -fopenmp.")
 
 set(CLANG_SYSTEMZ_DEFAULT_ARCH "z10" CACHE STRING "SystemZ Default Arch")
 
 set(CLANG_VENDOR ${PACKAGE_VENDOR} CACHE STRING
-        "Vendor-specific text for showing with version information.")
+  "Vendor-specific text for showing with version information.")
 
 set(CLANG_REPOSITORY_STRING "" CACHE STRING
-        "Vendor-specific text for showing the repository the source is taken from.")
+  "Vendor-specific text for showing the repository the source is taken from.")
 
 if(CLANG_REPOSITORY_STRING)
   add_definitions(-DCLANG_REPOSITORY_STRING="${CLANG_REPOSITORY_STRING}")
 endif()
 
 set(CLANG_VENDOR_UTI "org.llvm.clang" CACHE STRING
-        "Vendor-specific uti.")
+  "Vendor-specific uti.")
 
 set(CLANG_PYTHON_BINDINGS_VERSIONS "" CACHE STRING
-        "Python versions to install libclang python bindings for")
+    "Python versions to install libclang python bindings for")
 
 set(CLANG_LINK_CLANG_DYLIB ${LLVM_LINK_LLVM_DYLIB} CACHE BOOL
-        "Link tools against libclang-cpp.so")
+    "Link tools against libclang-cpp.so")
 
 if (NOT LLVM_LINK_LLVM_DYLIB AND CLANG_LINK_CLANG_DYLIB)
   message(FATAL_ERROR "Cannot set CLANG_LINK_CLANG_DYLIB=ON when "
-          "LLVM_LINK_LLVM_DYLIB=OFF")
+                      "LLVM_LINK_LLVM_DYLIB=OFF")
 endif()
 
 # The libdir suffix must exactly match whatever LLVM's configuration used.
 set(CLANG_LIBDIR_SUFFIX "${LLVM_LIBDIR_SUFFIX}")
 
 set(CLANG_TOOLS_INSTALL_DIR "${CMAKE_INSTALL_BINDIR}" CACHE PATH
-        "Path for binary subdirectory (defaults to '${CMAKE_INSTALL_BINDIR}')")
+    "Path for binary subdirectory (defaults to '${CMAKE_INSTALL_BINDIR}')")
 mark_as_advanced(CLANG_TOOLS_INSTALL_DIR)
 
 set(CLANG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -311,10 +311,10 @@ set(CLANG_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR AND NOT MSVC_IDE )
   message(FATAL_ERROR "In-source builds are not allowed. "
-          "Please create a directory and run cmake "
-          "from there, passing the path to this source directory as the last argument. "
-          "This process created the file `CMakeCache.txt' and the directory "
-          "`CMakeFiles'. Please delete them.")
+"Please create a directory and run cmake "
+"from there, passing the path to this source directory as the last argument. "
+"This process created the file `CMakeCache.txt' and the directory "
+"`CMakeFiles'. Please delete them.")
 endif()
 
 # If CLANG_VERSION_* is specified, use it, if not use LLVM_VERSION_*.
@@ -336,8 +336,8 @@ message(STATUS "Clang version: ${CLANG_VERSION}")
 
 # Configure the Version.inc file.
 configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/clang/Basic/Version.inc.in
-        ${CMAKE_CURRENT_BINARY_DIR}/include/clang/Basic/Version.inc)
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/clang/Basic/Version.inc.in
+  ${CMAKE_CURRENT_BINARY_DIR}/include/clang/Basic/Version.inc)
 
 # Add appropriate flags for GCC
 if (LLVM_COMPILER_IS_GCC_COMPATIBLE)
@@ -368,28 +368,28 @@ include(AddClang)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 include_directories(BEFORE
-        ${CMAKE_CURRENT_BINARY_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+  ${CMAKE_CURRENT_BINARY_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
 
 if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
   install(DIRECTORY include/clang include/clang-c
-          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-          COMPONENT clang-headers
-          FILES_MATCHING
-          PATTERN "*.def"
-          PATTERN "*.h"
-          PATTERN "config.h" EXCLUDE
-  )
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    COMPONENT clang-headers
+    FILES_MATCHING
+    PATTERN "*.def"
+    PATTERN "*.h"
+    PATTERN "config.h" EXCLUDE
+    )
 
   install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/clang
-          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-          COMPONENT clang-headers
-          FILES_MATCHING
-          PATTERN "CMakeFiles" EXCLUDE
-          PATTERN "*.inc"
-          PATTERN "*.h"
-  )
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    COMPONENT clang-headers
+    FILES_MATCHING
+    PATTERN "CMakeFiles" EXCLUDE
+    PATTERN "*.inc"
+    PATTERN "*.h"
+    )
 
   # Installing the headers needs to depend on generating any public
   # tablegen'd headers.
@@ -397,8 +397,8 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
   set_target_properties(clang-headers PROPERTIES FOLDER "Clang/Resources")
   if(NOT LLVM_ENABLE_IDE)
     add_llvm_install_targets(install-clang-headers
-            DEPENDS clang-headers
-            COMPONENT clang-headers)
+                             DEPENDS clang-headers
+                             COMPONENT clang-headers)
   endif()
 
   add_custom_target(bash-autocomplete DEPENDS utils/bash-autocomplete.sh)
@@ -408,13 +408,13 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
           COMPONENT bash-autocomplete)
   if(NOT LLVM_ENABLE_IDE)
     add_llvm_install_targets(install-bash-autocomplete
-            DEPENDS bash-autocomplete
-            COMPONENT bash-autocomplete)
+                             DEPENDS bash-autocomplete
+                             COMPONENT bash-autocomplete)
   endif()
 endif()
 
 option(CLANG_BUILD_TOOLS
-        "Build the Clang tools. If OFF, just generate build targets." ON)
+  "Build the Clang tools. If OFF, just generate build targets." ON)
 
 if(LLVM_ENABLE_PLUGINS OR LLVM_EXPORT_SYMBOLS_FOR_PLUGINS)
   set(HAVE_CLANG_PLUGIN_SUPPORT ON)
@@ -422,8 +422,8 @@ else()
   set(HAVE_CLANG_PLUGIN_SUPPORT OFF)
 endif()
 CMAKE_DEPENDENT_OPTION(CLANG_PLUGIN_SUPPORT
-        "Build clang with plugin support" ON
-        "HAVE_CLANG_PLUGIN_SUPPORT" OFF)
+  "Build clang with plugin support" ON
+  "HAVE_CLANG_PLUGIN_SUPPORT" OFF)
 
 # If libstdc++ is statically linked, clang-repl needs to statically link libstdc++
 # itself, which is not possible in many platforms because of current limitations in
@@ -434,7 +434,7 @@ endif()
 
 option(CLANG_ENABLE_ARCMT "Build ARCMT." ON)
 option(CLANG_ENABLE_STATIC_ANALYZER
-        "Include static analyzer in clang binary." ON)
+  "Include static analyzer in clang binary." ON)
 
 option(CLANG_ENABLE_PROTO_FUZZER "Build Clang protobuf fuzzer." OFF)
 
@@ -450,20 +450,20 @@ endif()
 # soon as possible. See discussion:
 # https://discourse.llvm.org/t/rationale-for-removing-versioned-libclang-middle-ground-to-keep-it-behind-option/
 option(CLANG_FORCE_MATCHING_LIBCLANG_SOVERSION
-        "Force the SOVERSION of libclang to be equal to CLANG_MAJOR" ON)
+  "Force the SOVERSION of libclang to be equal to CLANG_MAJOR" ON)
 
 # Clang version information
 set(CLANG_EXECUTABLE_VERSION
-        "${CLANG_VERSION_MAJOR}" CACHE STRING
-        "Major version number that will be appended to the clang executable name")
+    "${CLANG_VERSION_MAJOR}" CACHE STRING
+    "Major version number that will be appended to the clang executable name")
 set(LIBCLANG_LIBRARY_VERSION
-        "${CLANG_VERSION_MAJOR}" CACHE STRING
-        "Major version number that will be appended to the libclang library")
+    "${CLANG_VERSION_MAJOR}" CACHE STRING
+    "Major version number that will be appended to the libclang library")
 mark_as_advanced(CLANG_EXECUTABLE_VERSION LIBCLANG_LIBRARY_VERSION)
 
 option(CLANG_INCLUDE_TESTS
-        "Generate build targets for the Clang unit tests."
-        ${LLVM_INCLUDE_TESTS})
+       "Generate build targets for the Clang unit tests."
+       ${LLVM_INCLUDE_TESTS})
 
 option(CLANG_ENABLE_HLSL "Include HLSL build products" Off)
 # While HLSL support is experimental this should stay hidden.
@@ -479,10 +479,10 @@ add_subdirectory(include)
 # All targets below may depend on all tablegen'd files.
 get_property(CLANG_TABLEGEN_TARGETS GLOBAL PROPERTY CLANG_TABLEGEN_TARGETS)
 add_custom_target(clang-tablegen-targets
-        DEPENDS
-        omp_gen
-        ClangDriverOptions
-        ${CLANG_TABLEGEN_TARGETS})
+  DEPENDS
+  omp_gen
+  ClangDriverOptions
+  ${CLANG_TABLEGEN_TARGETS})
 set_target_properties(clang-tablegen-targets PROPERTIES FOLDER "Clang/Tablegenning/Targets")
 list(APPEND LLVM_COMMON_DEPENDS clang-tablegen-targets)
 
@@ -498,7 +498,7 @@ add_subdirectory(tools)
 add_subdirectory(runtime)
 
 option(CLANG_BUILD_EXAMPLES "Build CLANG example programs by default." OFF)
-
+add_subdirectory(examples)
 
 if(APPLE)
   # this line is needed as a cleanup to ensure that any CMakeCaches with the old
@@ -510,7 +510,7 @@ if(APPLE)
 
 
   set(CLANG_ORDER_FILE ${CMAKE_CURRENT_BINARY_DIR}/clang.order CACHE FILEPATH
-          "Order file to use when compiling clang in order to improve startup time (Darwin Only - requires ld64).")
+    "Order file to use when compiling clang in order to improve startup time (Darwin Only - requires ld64).")
 
   if(NOT EXISTS ${CLANG_ORDER_FILE})
     string(FIND "${CLANG_ORDER_FILE}" "${CMAKE_CURRENT_BINARY_DIR}" PATH_START)
@@ -529,7 +529,7 @@ if( CLANG_INCLUDE_TESTS )
   add_subdirectory(unittests)
   list(APPEND CLANG_TEST_DEPS ClangUnitTests)
   list(APPEND CLANG_TEST_PARAMS
-          clang_unit_site_config=${CMAKE_CURRENT_BINARY_DIR}/test/Unit/lit.site.cfg
+    clang_unit_site_config=${CMAKE_CURRENT_BINARY_DIR}/test/Unit/lit.site.cfg
   )
   add_subdirectory(test)
   add_subdirectory(bindings/python/tests)
@@ -541,7 +541,7 @@ if( CLANG_INCLUDE_TESTS )
 endif()
 
 option(CLANG_INCLUDE_DOCS "Generate build targets for the Clang docs."
-        ${LLVM_INCLUDE_DOCS})
+  ${LLVM_INCLUDE_DOCS})
 if( CLANG_INCLUDE_DOCS )
   add_subdirectory(docs)
 endif()
@@ -552,8 +552,8 @@ set_target_properties(clang-libraries PROPERTIES FOLDER "Clang/Install")
 
 if(NOT LLVM_ENABLE_IDE)
   add_llvm_install_targets(install-clang-libraries
-          DEPENDS clang-libraries
-          COMPONENT clang-libraries)
+                           DEPENDS clang-libraries
+                           COMPONENT clang-libraries)
 endif()
 
 get_property(CLANG_LIBS GLOBAL PROPERTY CLANG_LIBS)
@@ -634,7 +634,7 @@ if (CLANG_ENABLE_BOOTSTRAP)
       # work around the envar being filtered away we pass it in as a CMake
       # variable, and have LLVM's CMake append the envar to the archiver calls.
       set(LTO_LIBRARY -DDARWIN_LTO_LIBRARY=${LLVM_SHLIB_OUTPUT_INTDIR}/libLTO.dylib
-              -DDYLD_LIBRARY_PATH=${LLVM_LIBRARY_OUTPUT_INTDIR})
+        -DDYLD_LIBRARY_PATH=${LLVM_LIBRARY_OUTPUT_INTDIR})
     elseif(MSVC)
       add_dependencies(clang-bootstrap-deps llvm-lib)
       set(${CLANG_STAGE}_AR -DCMAKE_AR=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-lib)
@@ -653,41 +653,41 @@ if (CLANG_ENABLE_BOOTSTRAP)
   endif()
 
   add_custom_target(${NEXT_CLANG_STAGE}-clear
-          DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${NEXT_CLANG_STAGE}-cleared
-  )
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${NEXT_CLANG_STAGE}-cleared
+    )
   add_custom_command(
-          OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${NEXT_CLANG_STAGE}-cleared
-          DEPENDS clang-bootstrap-deps
-          COMMAND ${CMAKE_COMMAND} -E remove_directory ${BINARY_DIR}
-          COMMAND ${CMAKE_COMMAND} -E make_directory ${BINARY_DIR}
-          COMMAND ${CMAKE_COMMAND} -E remove_directory ${STAMP_DIR}
-          COMMAND ${CMAKE_COMMAND} -E make_directory ${STAMP_DIR}
-          COMMENT "Clobberring ${NEXT_CLANG_STAGE} build and stamp directories"
-  )
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${NEXT_CLANG_STAGE}-cleared
+    DEPENDS clang-bootstrap-deps
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${STAMP_DIR}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${STAMP_DIR}
+    COMMENT "Clobberring ${NEXT_CLANG_STAGE} build and stamp directories"
+    )
 
   if(CMAKE_VERBOSE_MAKEFILE)
     set(verbose -DCMAKE_VERBOSE_MAKEFILE=On)
   endif()
 
   set(_BOOTSTRAP_DEFAULT_PASSTHROUGH
-          PACKAGE_VERSION
-          PACKAGE_VENDOR
-          LLVM_VERSION_MAJOR
-          LLVM_VERSION_MINOR
-          LLVM_VERSION_PATCH
-          CLANG_VERSION_MAJOR
-          CLANG_VERSION_MINOR
-          CLANG_VERSION_PATCHLEVEL
-          CLANG_VERSION_SUFFIX
-          CLANG_VENDOR
-          LLVM_VERSION_SUFFIX
-          LLVM_BINUTILS_INCDIR
-          CLANG_REPOSITORY_STRING
-          CMAKE_MAKE_PROGRAM
-          CMAKE_OSX_ARCHITECTURES
-          CMAKE_BUILD_TYPE
-          LLVM_ENABLE_PROJECTS
-          LLVM_ENABLE_RUNTIMES)
+    PACKAGE_VERSION
+    PACKAGE_VENDOR
+    LLVM_VERSION_MAJOR
+    LLVM_VERSION_MINOR
+    LLVM_VERSION_PATCH
+    CLANG_VERSION_MAJOR
+    CLANG_VERSION_MINOR
+    CLANG_VERSION_PATCHLEVEL
+    CLANG_VERSION_SUFFIX
+    CLANG_VENDOR
+    LLVM_VERSION_SUFFIX
+    LLVM_BINUTILS_INCDIR
+    CLANG_REPOSITORY_STRING
+    CMAKE_MAKE_PROGRAM
+    CMAKE_OSX_ARCHITECTURES
+    CMAKE_BUILD_TYPE
+    LLVM_ENABLE_PROJECTS
+    LLVM_ENABLE_RUNTIMES)
 
   # We don't need to depend on compiler-rt/libcxx if we're building instrumented
   # because the next stage will use the same compiler used to build this stage.
@@ -708,10 +708,10 @@ if (CLANG_ENABLE_BOOTSTRAP)
   endif()
 
   set(COMPILER_OPTIONS
-          -DCMAKE_CXX_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/${CXX_COMPILER}
-          -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/${C_COMPILER}
-          -DCMAKE_ASM_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/${C_COMPILER}
-          -DCMAKE_ASM_COMPILER_ID=Clang)
+    -DCMAKE_CXX_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/${CXX_COMPILER}
+    -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/${C_COMPILER}
+    -DCMAKE_ASM_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/${C_COMPILER}
+    -DCMAKE_ASM_COMPILER_ID=Clang)
 
   # cmake requires CMAKE_LINKER to be specified if the compiler is MSVC-like,
   # otherwise it defaults the linker to be link.exe.
@@ -723,8 +723,8 @@ if (CLANG_ENABLE_BOOTSTRAP)
 
   if(BOOTSTRAP_CMAKE_SYSTEM_NAME)
     set(${CLANG_STAGE}_TABLEGEN
-            -DLLVM_TABLEGEN=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-tblgen
-            -DCLANG_TABLEGEN=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang-tblgen)
+      -DLLVM_TABLEGEN=${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-tblgen
+      -DCLANG_TABLEGEN=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang-tblgen)
     if(BOOTSTRAP_CMAKE_SYSTEM_NAME STREQUAL "Linux")
       if(BOOTSTRAP_LLVM_ENABLE_LLD)
         set(${CLANG_STAGE}_LINKER -DCMAKE_LINKER=${LLVM_RUNTIME_OUTPUT_INTDIR}/ld.lld)
@@ -751,13 +751,13 @@ if (CLANG_ENABLE_BOOTSTRAP)
     set(PGO_OPT -DLLVM_PROFDATA_FILE=${CMAKE_CURRENT_BINARY_DIR}/utils/perf-training/clang.profdata)
     # Use the current tools for LTO instead of the instrumented ones
     list(APPEND _BOOTSTRAP_DEFAULT_PASSTHROUGH
-            CMAKE_CXX_COMPILER
-            CMAKE_C_COMPILER
-            CMAKE_ASM_COMPILER
-            CMAKE_AR
-            CMAKE_RANLIB
-            DARWIN_LTO_LIBRARY
-            DYLD_LIBRARY_PATH)
+      CMAKE_CXX_COMPILER
+      CMAKE_C_COMPILER
+      CMAKE_ASM_COMPILER
+      CMAKE_AR
+      CMAKE_RANLIB
+      DARWIN_LTO_LIBRARY
+      DYLD_LIBRARY_PATH)
 
     set(COMPILER_OPTIONS)
     set(LTO_LIBRARY)
@@ -774,7 +774,7 @@ if (CLANG_ENABLE_BOOTSTRAP)
         string(REPLACE ";" "|" value "${${variableName}}")
       endif()
       list(APPEND PASSTHROUGH_VARIABLES
-              -D${variableName}=${value})
+        -D${variableName}=${value})
     endif()
   endforeach()
 
@@ -786,11 +786,11 @@ if (CLANG_ENABLE_BOOTSTRAP)
       string(SUBSTRING ${variableName} 10 -1 varName)
       string(REPLACE ";" "|" value "${${variableName}}")
       list(APPEND PASSTHROUGH_VARIABLES
-              -D${varName}=${value})
+        -D${varName}=${value})
     endif()
     if(${variableName} AND variableName MATCHES "LLVM_EXTERNAL_.*_SOURCE_DIR")
       list(APPEND PASSTHROUGH_VARIABLES
-              -D${variableName}=${${variableName}})
+        -D${variableName}=${${variableName}})
     endif()
   endforeach()
 
@@ -803,45 +803,45 @@ if (CLANG_ENABLE_BOOTSTRAP)
   endif()
 
   ExternalProject_Add(${NEXT_CLANG_STAGE}
-          DEPENDS clang-bootstrap-deps
-          PREFIX ${NEXT_CLANG_STAGE}
-          SOURCE_DIR ${CMAKE_SOURCE_DIR}
-          STAMP_DIR ${STAMP_DIR}
-          BINARY_DIR ${BINARY_DIR}
-          EXCLUDE_FROM_ALL 1
-          CMAKE_ARGS
-          # We shouldn't need to set this here, but INSTALL_DIR doesn't
-          # seem to work, so instead I'm passing this through
-          -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-          ${PASSTHROUGH_VARIABLES}
-          ${CLANG_BOOTSTRAP_CMAKE_ARGS}
-          -DCLANG_STAGE=${NEXT_CLANG_STAGE}
-          ${COMPILER_OPTIONS}
-          ${${CLANG_STAGE}_TABLEGEN}
-          ${LTO_LIBRARY} ${verbose} ${PGO_OPT}
-          ${${CLANG_STAGE}_LINKER}
-          ${${CLANG_STAGE}_AR}
-          ${${CLANG_STAGE}_RANLIB}
-          ${${CLANG_STAGE}_OBJCOPY}
-          ${${CLANG_STAGE}_STRIP}
-          BUILD_COMMAND ${CMAKE_COMMAND} --build ${BINARY_DIR}
-          --config ${build_configuration}
-          ${build_tool_args}
-          INSTALL_COMMAND ""
-          STEP_TARGETS configure build
-          USES_TERMINAL_CONFIGURE 1
-          USES_TERMINAL_BUILD 1
-          USES_TERMINAL_INSTALL 1
-          LIST_SEPARATOR |
-  )
+    DEPENDS clang-bootstrap-deps
+    PREFIX ${NEXT_CLANG_STAGE}
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}
+    STAMP_DIR ${STAMP_DIR}
+    BINARY_DIR ${BINARY_DIR}
+    EXCLUDE_FROM_ALL 1
+    CMAKE_ARGS
+                # We shouldn't need to set this here, but INSTALL_DIR doesn't
+                # seem to work, so instead I'm passing this through
+                -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+                ${PASSTHROUGH_VARIABLES}
+                ${CLANG_BOOTSTRAP_CMAKE_ARGS}
+                 -DCLANG_STAGE=${NEXT_CLANG_STAGE}
+                ${COMPILER_OPTIONS}
+                ${${CLANG_STAGE}_TABLEGEN}
+                ${LTO_LIBRARY} ${verbose} ${PGO_OPT}
+                ${${CLANG_STAGE}_LINKER}
+                ${${CLANG_STAGE}_AR}
+                ${${CLANG_STAGE}_RANLIB}
+                ${${CLANG_STAGE}_OBJCOPY}
+                ${${CLANG_STAGE}_STRIP}
+    BUILD_COMMAND ${CMAKE_COMMAND} --build ${BINARY_DIR}
+                                   --config ${build_configuration}
+                                   ${build_tool_args}
+    INSTALL_COMMAND ""
+    STEP_TARGETS configure build
+    USES_TERMINAL_CONFIGURE 1
+    USES_TERMINAL_BUILD 1
+    USES_TERMINAL_INSTALL 1
+    LIST_SEPARATOR |
+    )
 
   # exclude really-install from main target
   set_target_properties(${NEXT_CLANG_STAGE} PROPERTIES _EP_really-install_EXCLUDE_FROM_MAIN On)
   ExternalProject_Add_Step(${NEXT_CLANG_STAGE} really-install
-          COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
-          COMMENT "Performing install step for '${NEXT_CLANG_STAGE}'"
-          DEPENDEES build
-          USES_TERMINAL 1
+    COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
+    COMMENT "Performing install step for '${NEXT_CLANG_STAGE}'"
+    DEPENDEES build
+    USES_TERMINAL 1
   )
   ExternalProject_Add_StepTargets(${NEXT_CLANG_STAGE} really-install)
   add_custom_target(${NEXT_CLANG_STAGE}-install DEPENDS ${NEXT_CLANG_STAGE}-really-install)
@@ -852,17 +852,17 @@ if (CLANG_ENABLE_BOOTSTRAP)
   foreach(target ${CLANG_BOOTSTRAP_TARGETS})
 
     ExternalProject_Add_Step(${NEXT_CLANG_STAGE} ${target}
-            COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target ${target}
-            COMMENT "Performing ${target} for '${NEXT_CLANG_STAGE}'"
-            DEPENDEES configure
-            # We need to set ALWAYS to ON here, otherwise these targets won't be
-            # built on a second invocation of ninja.  The targets have their own
-            # logic to determine if they should build or not so setting ALWAYS ON
-            # here does not mean the targets will always rebuild it just means that
-            # they will check their dependenices and see if they need to be built.
-            ALWAYS ON
-            EXCLUDE_FROM_MAIN ON
-            USES_TERMINAL 1
+      COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target ${target}
+      COMMENT "Performing ${target} for '${NEXT_CLANG_STAGE}'"
+      DEPENDEES configure
+      # We need to set ALWAYS to ON here, otherwise these targets won't be
+      # built on a second invocation of ninja.  The targets have their own
+      # logic to determine if they should build or not so setting ALWAYS ON
+      # here does not mean the targets will always rebuild it just means that
+      # they will check their dependenices and see if they need to be built.
+      ALWAYS ON
+      EXCLUDE_FROM_MAIN ON
+      USES_TERMINAL 1
     )
 
     if(target MATCHES "^stage[0-9]*")
@@ -886,5 +886,5 @@ endif()
 set(CLANG_INSTALL_LIBDIR_BASENAME "lib${CLANG_LIBDIR_SUFFIX}")
 
 configure_file(
-        ${CLANG_SOURCE_DIR}/include/clang/Config/config.h.cmake
-        ${CLANG_BINARY_DIR}/include/clang/Config/config.h)
+  ${CLANG_SOURCE_DIR}/include/clang/Config/config.h.cmake
+  ${CLANG_BINARY_DIR}/include/clang/Config/config.h)
