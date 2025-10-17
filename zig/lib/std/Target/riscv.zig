@@ -162,6 +162,7 @@ pub const Feature = enum {
     xmipscmove,
     xmipslsp,
     xsfcease,
+    xesppie,
     xsfvcp,
     xsfvfnrclipxfqf,
     xsfvfwmaccqqq,
@@ -1376,6 +1377,11 @@ pub const all_features = blk: {
         .description = "'XSfcease' (SiFive sf.cease Instruction)",
         .dependencies = featureSet(&[_]Feature{}),
     };
+    result[@intFromEnum(Feature.xesppie)] = .{
+        .llvm_name = "xesppie",
+        .description = "'Espressif ESP32P4'",
+        .dependencies = featureSet(&[_]Feature{}),
+    };
     result[@intFromEnum(Feature.xsfvcp)] = .{
         .llvm_name = "xsfvcp",
         .description = "'XSfvcp' (SiFive Custom Vector Coprocessor Interface Instructions)",
@@ -2156,6 +2162,22 @@ pub const cpu = struct {
             .d,
             .i,
             .m,
+        }),
+    };
+    pub const esp32p4: CpuModel = .{
+        .name = "esp32p4",
+        .llvm_name = "esp32p4",
+        .features = featureSet(&[_]Feature{
+            .@"32bit",
+            .a,
+            .c,
+            .f,
+            .m,
+            .xesppie,
+            .zcb,
+            .zcmp,
+            .zcmt,
+            .zifencei,
         }),
     };
     pub const generic: CpuModel = .{
