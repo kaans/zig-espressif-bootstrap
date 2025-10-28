@@ -13,6 +13,7 @@
 
 #include "XtensaISelLowering.h"
 #include "XtensaConstantPoolValue.h"
+#include "XtensaInstrInfo.h"
 #include "XtensaMachineFunctionInfo.h"
 #include "XtensaSubtarget.h"
 #include "XtensaTargetMachine.h"
@@ -148,11 +149,12 @@ XtensaTargetLowering::XtensaTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FP_TO_UINT, MVT::i32, Expand);
   setOperationAction(ISD::FP_TO_SINT, MVT::i32, Expand);
 
-  // No sign extend instructions for i1
+  // No sign extend instructions for i1 and sign extend load i8
   for (MVT VT : MVT::integer_valuetypes()) {
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::i1, Promote);
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i8, Expand);
   }
 
   setOperationAction(ISD::ConstantPool, PtrVT, Custom);
@@ -400,11 +402,10 @@ XtensaTargetLowering::XtensaTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::STACKSAVE, MVT::Other, Custom);
   setOperationAction(ISD::STACKRESTORE, MVT::Other, Custom);
 
-  // VASTART and VACOPY need to deal with the Xtensa-specific varargs
+  // VASTART, VAARG and VACOPY need to deal with the Xtensa-specific varargs
   // structure, but VAEND is a no-op.
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  // we use special va_list structure so we have to customize this
-  setOperationAction(ISD::VAARG, MVT::Other, Expand);
+  setOperationAction(ISD::VAARG, MVT::Other, Custom);
   setOperationAction(ISD::VACOPY, MVT::Other, Custom);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
@@ -765,9 +766,9 @@ static SDValue PerformHWLoopCombine(SDNode *N, SelectionDAG &DAG,
 
   SDValue Int = SearchLoopIntrinsic(Cond, CC, Imm, Negate);
   if (Int) {
-    assert((N->hasOneUse() && N->use_begin()->getOpcode() == ISD::BR) &&
+    assert((N->hasOneUse() && N->use_begin()->getUser()->getOpcode() == ISD::BR) &&
            "expected single br user");
-    SDNode *Br = *N->use_begin();
+    SDNode *Br = (*N->use_begin()).getUser();
     SDValue OtherTarget = Br->getOperand(1);
 
     if (Negate)
@@ -1085,10 +1086,10 @@ SDValue XtensaTargetLowering::LowerFormalArguments(
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  XtensaFunctionInfo *XtensaFI = MF.getInfo<XtensaFunctionInfo>();
+  XtensaMachineFunctionInfo *XtensaFI = MF.getInfo<XtensaMachineFunctionInfo>();
   EVT PtrVT = getPointerTy(MF.getDataLayout());
 
-  XtensaFI->setVarArgsFrameIndex(0);
+  XtensaFI->setVarArgsInRegsFrameIndex(0);
 
   // Used with vargs to acumulate store chains.
   std::vector<SDValue> OutChains;
@@ -1105,7 +1106,7 @@ SDValue XtensaTargetLowering::LowerFormalArguments(
     // Arguments stored on registers
     if (VA.isRegLoc()) {
       EVT RegVT = VA.getLocVT();
-      const TargetRegisterClass *RC;
+      const TargetRegisterClass *RC = &Xtensa::ARRegClass;
 
       if (RegVT == MVT::i32) {
         RC = &Xtensa::ARRegClass;
@@ -1190,7 +1191,7 @@ SDValue XtensaTargetLowering::LowerFormalArguments(
 
     XtensaFI->setVarArgsFirstGPR(Idx + 2); // 2 - number of a2 register
 
-    XtensaFI->setVarArgsStackOffset(MFI.CreateFixedObject(
+    XtensaFI->setVarArgsOnStackFrameIndex(MFI.CreateFixedObject(
         PtrVT.getSizeInBits() / 8, CCInfo.getStackSize(), true));
 
     // Offset of the first variable argument from stack pointer, and size of
@@ -1211,7 +1212,7 @@ SDValue XtensaTargetLowering::LowerFormalArguments(
     // Record the frame index of the first variable argument
     // which is a value necessary to VASTART.
     int FI = MFI.CreateFixedObject(RegSize, VaArgOffset, true);
-    XtensaFI->setVarArgsFrameIndex(FI);
+    XtensaFI->setVarArgsInRegsFrameIndex(FI);
 
     // Copy the integer registers that may have been used for passing varargs
     // to the vararg save area.
@@ -1325,7 +1326,8 @@ XtensaTargetLowering::LowerCall(CallLoweringInfo &CLI,
       SDValue Memcpy = DAG.getMemcpy(
           Chain, DL, Address, ArgValue, SizeNode, Flags.getNonZeroByValAlign(),
           /*isVolatile=*/false, /*AlwaysInline=*/false,
-          /*CI=*/nullptr, std::nullopt, MachinePointerInfo(), MachinePointerInfo());
+          /*CI=*/nullptr, std::nullopt, MachinePointerInfo(),
+          MachinePointerInfo());
       MemOpChains.push_back(Memcpy);
     } else {
       assert(VA.isMemLoc() && "Argument not register or memory");
@@ -1452,7 +1454,8 @@ XtensaTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
 bool XtensaTargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool IsVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
+    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context,
+    const Type *RetTy) const {
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, Context);
   return CCInfo.CheckReturn(Outs, RetCC_Xtensa);
@@ -1589,8 +1592,8 @@ SDValue XtensaTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   bool Val = false;
   for (SDNode::use_iterator UI = OpNode.use_begin(); UI != OpNode.use_end();
        ++UI) {
-    SDNode &User = *UI.getUse().getUser();
-    unsigned OpCode = User.getOpcode();
+    SDNode *User = UI->getUser();
+    unsigned OpCode = User->getOpcode();
     if (OpCode == ISD::BRCOND) {
       Val = true;
       break;
@@ -1616,22 +1619,23 @@ SDValue XtensaTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 
 SDValue XtensaTargetLowering::LowerRETURNADDR(SDValue Op,
                                               SelectionDAG &DAG) const {
-  // check the depth
-  // TODO: xtensa-gcc can handle this, by navigating through the stack, we
-  // should be able to do this too
-  assert((cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue() == 0) &&
-         "Return address can be determined only for current frame.");
+  // This nodes represent llvm.returnaddress on the DAG.
+  // It takes one operand, the index of the return address to return.
+  // An index of zero corresponds to the current function's return address.
+  // An index of one to the parent's return address, and so on.
+  // Depths > 0 not supported yet!
+  if (Op.getConstantOperandVal(0) != 0)
+    return SDValue();
 
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  MVT VT = Op.getSimpleValueType();
-  unsigned RA = Xtensa::A0;
+  EVT VT = Op.getValueType();
   MFI.setReturnAddressIsTaken(true);
 
   // Return RA, which contains the return address. Mark it an implicit
   // live-in.
-  unsigned Reg = MF.addLiveIn(RA, getRegClassFor(VT));
-  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), Reg, VT);
+  Register RA = MF.addLiveIn(Xtensa::A0, getRegClassFor(MVT::i32));
+  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), RA, VT);
 }
 
 SDValue XtensaTargetLowering::LowerImmediate(SDValue Op,
@@ -1643,6 +1647,11 @@ SDValue XtensaTargetLowering::LowerImmediate(SDValue Op,
   if (Op.getValueType() == MVT::i32) {
     // Check if use node maybe lowered to the MOVI instruction
     if (Value > -2048 && Value <= 2047)
+      return Op;
+    // Check if use node maybe lowered to the ADDMI instruction
+    SDNode &OpNode = *Op.getNode();
+    if ((OpNode.hasOneUse() && OpNode.user_begin()->getOpcode() == ISD::ADD) &&
+        isShiftedInt<8, 8>(Value))
       return Op;
     Type *Ty = Type::getInt32Ty(*DAG.getContext());
     Constant *CV = ConstantInt::get(Ty, Value);
@@ -1793,7 +1802,7 @@ SDValue XtensaTargetLowering::LowerConstantPool(SDValue Op,
   // Do not use constant pool for aggregate or vector constant types,
   // in such cases create global variable
   if (T->isAggregateType() || T->isVectorTy()) {
-    auto AFI = DAG.getMachineFunction().getInfo<XtensaFunctionInfo>();
+    auto AFI = DAG.getMachineFunction().getInfo<XtensaMachineFunctionInfo>();
     auto M = const_cast<Module *>(
         DAG.getMachineFunction().getFunction().getParent());
     auto GV = new GlobalVariable(
@@ -1833,18 +1842,23 @@ SDValue XtensaTargetLowering::LowerSTACKRESTORE(SDValue Op,
 
 SDValue XtensaTargetLowering::LowerFRAMEADDR(SDValue Op,
                                              SelectionDAG &DAG) const {
-  // check the depth
-  assert((cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue() == 0) &&
-         "Frame address can only be determined for current frame.");
+  // This nodes represent llvm.frameaddress on the DAG.
+  // It takes one operand, the index of the frame address to return.
+  // An index of zero corresponds to the current function's frame address.
+  // An index of one to the parent's frame address, and so on.
+  // Depths > 0 not supported yet!
+  if (Op.getConstantOperandVal(0) != 0)
+    return SDValue();
 
   MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setFrameAddressIsTaken(true);
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
 
-  unsigned FrameReg = Subtarget.getRegisterInfo()->getFrameRegister(MF);
-  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameReg, VT);
+  Register FrameRegister = Subtarget.getRegisterInfo()->getFrameRegister(MF);
+  SDValue FrameAddr =
+      DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameRegister, VT);
   return FrameAddr;
 }
 
@@ -1859,7 +1873,7 @@ SDValue XtensaTargetLowering::LowerDYNAMIC_STACKALLOC(SDValue Op,
   SDValue SizeTmp =
       DAG.getNode(ISD::ADD, DL, VT, Size, DAG.getConstant(31, DL, MVT::i32));
   SDValue SizeRoundUp = DAG.getNode(ISD::AND, DL, VT, SizeTmp,
-                                    DAG.getConstant(~31, DL, MVT::i32));
+                                    DAG.getSignedConstant(~31, DL, MVT::i32));
 
   unsigned SPReg = Xtensa::SP;
   SDValue SP = DAG.getCopyFromReg(Chain, DL, SPReg, VT);
@@ -1881,99 +1895,155 @@ SDValue XtensaTargetLowering::LowerDYNAMIC_STACKALLOC(SDValue Op,
 SDValue XtensaTargetLowering::LowerVASTART(SDValue Op,
                                            SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
-  XtensaFunctionInfo *XtensaFI = MF.getInfo<XtensaFunctionInfo>();
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
-  SDLoc DL(Op);
-
+  XtensaMachineFunctionInfo *XtensaFI = MF.getInfo<XtensaMachineFunctionInfo>();
   SDValue Chain = Op.getOperand(0);
   SDValue Addr = Op.getOperand(1);
+  EVT PtrVT = Addr.getValueType();
+  SDLoc DL(Op);
 
-  // typedef struct __va_list_tag {
-  //   int32_t *__va_stk; /* Initialized to point  to the position of the
-  //                       * first argument in memory offset to account for
-  //                       the
-  //                       * arguments passed in registers and to account for
-  //                       * the size of the argument registers not being
-  //                       16-byte
-  //                       * aligned.  E.G., there are 6 argument registers
-  //                       * of 4 bytes each, but we want the __va_ndx for the
-  //                       * first stack argument to have the maximal
-  //                       * alignment of 16 bytes, so we offset the __va_stk
-  //                       address by
-  //                       * 32 bytes so that __va_stk[32] references the
-  //                       first
-  //                       * argument on the stack.
-  //                       */
-  //   int32_t  *__va_reg; /* Points to a stack-allocated region holding the
-  //                        * contents
-  //                        * of the incoming argument registers
-  //                        */
-  //   int32_t __va_ndx;   /* Index initialized to the position of the first
-  //                        * unnamed (variable) argument.  This same index is
-  //                        also
-  //                        * used to address the arguments passed in memory.
-  //                       */
-  //  } __va_list_tag[1];
+  // Struct va_list_tag
+  // int32 *va_stk - points to the arguments passed in memory
+  // int32 *va_reg - points to the registers with arguments saved in memory
+  // int32 va_ndx  - offset from va_stk or va_reg pointers which points to  the
+  // next variable argument
 
-  SDValue ArgAR;
+  SDValue VAIndex;
   SDValue OverflowPtrAdvance;
   SDValue StackOffsetFI =
-      DAG.getFrameIndex(XtensaFI->getVarArgsStackOffset(), PtrVT);
+      DAG.getFrameIndex(XtensaFI->getVarArgsOnStackFrameIndex(), PtrVT);
+  unsigned ArgWords = XtensaFI->getVarArgsFirstGPR() - 2;
 
-  if (XtensaFI->getVarArgsFirstGPR() < 8) {
-    ArgAR =
-        DAG.getConstant(XtensaFI->getVarArgsFirstGPR() * 4 - 8, DL, MVT::i32);
+  if (ArgWords < 6) {
+    VAIndex = DAG.getConstant(ArgWords * 4, DL, MVT::i32);
     OverflowPtrAdvance = DAG.getConstant(32, DL, PtrVT);
   } else {
     OverflowPtrAdvance = DAG.getNode(ISD::AND, DL, PtrVT, StackOffsetFI,
                                      DAG.getConstant(0xf, DL, PtrVT));
     OverflowPtrAdvance = DAG.getNode(ISD::ADD, DL, PtrVT, OverflowPtrAdvance,
                                      DAG.getConstant(32, DL, PtrVT));
-    ArgAR = OverflowPtrAdvance;
+    VAIndex = OverflowPtrAdvance;
   }
 
-  SDValue FR = DAG.getFrameIndex(XtensaFI->getVarArgsFrameIndex(), PtrVT);
-
-  uint64_t FrameOffset = PtrVT.getSizeInBits() / 8;
-  SDValue ConstFrameOffset1 = DAG.getConstant(FrameOffset, DL, PtrVT);
-  SDValue ConstFrameOffset2 = DAG.getConstant(FrameOffset * 2, DL, PtrVT);
-
+  SDValue FrameIndex =
+      DAG.getFrameIndex(XtensaFI->getVarArgsInRegsFrameIndex(), PtrVT);
+  uint64_t FrameOffset = PtrVT.getStoreSize();
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
 
-  // Store first word : arguments given in stack  (__va_stk)
-  // Advance Argument Overflow pointer down, lest it will point to start
-  // after register argument va_arg finished
-  SDValue StackOffsetFICorr =
+  // Store pointer to arguments given on stack (va_stk)
+  SDValue StackPtr =
       DAG.getNode(ISD::SUB, DL, PtrVT, StackOffsetFI, OverflowPtrAdvance);
-  SDValue firstStore =
-      DAG.getStore(Chain, DL, StackOffsetFICorr, Addr, MachinePointerInfo(SV));
 
-  uint64_t nextOffset = FrameOffset;
-  SDValue nextPtr = DAG.getNode(ISD::ADD, DL, PtrVT, Addr, ConstFrameOffset1);
+  SDValue StoreStackPtr =
+      DAG.getStore(Chain, DL, StackPtr, Addr, MachinePointerInfo(SV));
 
-  // Store second word : arguments given on registers  (__va_reg)
-  SDValue FRAdvance =
-      DAG.getConstant(XtensaFI->getVarArgsFirstGPR() * 4 - 8, DL, PtrVT);
-  SDValue FRDecr = DAG.getNode(ISD::SUB, DL, PtrVT, FR, FRAdvance);
-  SDValue secondStore = DAG.getStore(firstStore, DL, FRDecr, nextPtr,
-                                     MachinePointerInfo(SV, nextOffset));
-  nextOffset += FrameOffset;
-  nextPtr = DAG.getNode(ISD::ADD, DL, PtrVT, Addr, ConstFrameOffset2);
+  uint64_t NextOffset = FrameOffset;
+  SDValue NextPtr =
+      DAG.getObjectPtrOffset(DL, Addr, TypeSize::getFixed(NextOffset));
 
-  // Store first word : number of int regs  (__va_ndx)
-  return DAG.getStore(secondStore, DL, ArgAR, nextPtr,
-                      MachinePointerInfo(SV, nextOffset));
+  // Store pointer to arguments given on registers (va_reg)
+  SDValue FRAdvance = DAG.getConstant(ArgWords * 4, DL, PtrVT);
+  SDValue FRDecr = DAG.getNode(ISD::SUB, DL, PtrVT, FrameIndex, FRAdvance);
+  SDValue StoreRegPtr = DAG.getStore(StoreStackPtr, DL, FRDecr, NextPtr,
+                                     MachinePointerInfo(SV, NextOffset));
+  NextOffset += FrameOffset;
+  NextPtr = DAG.getObjectPtrOffset(DL, Addr, TypeSize::getFixed(NextOffset));
+
+  // Store third word : position in bytes of the first VA argument (va_ndx)
+  return DAG.getStore(StoreRegPtr, DL, VAIndex, NextPtr,
+                      MachinePointerInfo(SV, NextOffset));
 }
 
 SDValue XtensaTargetLowering::LowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
-  // We have to copy the entire va_list struct:
-  // 2*sizeof(int*) + sizeof(int) = 12 Byte
-  unsigned VAListSize = 12;
-  return DAG.getMemcpy(
-      Op.getOperand(0), Op, Op.getOperand(1), Op.getOperand(2),
-      DAG.getConstant(VAListSize, SDLoc(Op), MVT::i32), Align(8),
-      /*isVolatile=*/false, /*AlwaysInline=*/true,
-      /*CI=*/nullptr, std::nullopt, MachinePointerInfo(), MachinePointerInfo());
+  // Size of the va_list_tag structure
+  constexpr unsigned VAListSize = 3 * 4;
+  SDValue Chain = Op.getOperand(0);
+  SDValue DstPtr = Op.getOperand(1);
+  SDValue SrcPtr = Op.getOperand(2);
+  const Value *DstSV = cast<SrcValueSDNode>(Op.getOperand(3))->getValue();
+  const Value *SrcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
+  SDLoc DL(Op);
+
+  return DAG.getMemcpy(Chain, DL, DstPtr, SrcPtr,
+                       DAG.getConstant(VAListSize, SDLoc(Op), MVT::i32),
+                       Align(4), /*isVolatile*/ false, /*AlwaysInline*/ true,
+                       /*CI=*/nullptr, std::nullopt, MachinePointerInfo(DstSV),
+                       MachinePointerInfo(SrcSV));
+}
+
+SDValue XtensaTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
+  SDNode *Node = Op.getNode();
+  EVT VT = Node->getValueType(0);
+  Type *Ty = VT.getTypeForEVT(*DAG.getContext());
+  EVT PtrVT = Op.getValueType();
+  SDValue InChain = Node->getOperand(0);
+  SDValue VAListPtr = Node->getOperand(1);
+  const Value *SV = cast<SrcValueSDNode>(Node->getOperand(2))->getValue();
+  SDLoc DL(Node);
+  auto &TD = DAG.getDataLayout();
+  Align ArgAlignment = TD.getABITypeAlign(Ty);
+  unsigned ArgAlignInBytes = ArgAlignment.value();
+  unsigned ArgSizeInBytes = TD.getTypeAllocSize(Ty);
+  unsigned VASizeInBytes = llvm::alignTo(ArgSizeInBytes, 4);
+
+  // va_stk
+  SDValue VAStack =
+      DAG.getLoad(MVT::i32, DL, InChain, VAListPtr, MachinePointerInfo());
+  InChain = VAStack.getValue(1);
+
+  // va_reg
+  SDValue VARegPtr =
+      DAG.getObjectPtrOffset(DL, VAListPtr, TypeSize::getFixed(4));
+  SDValue VAReg =
+      DAG.getLoad(MVT::i32, DL, InChain, VARegPtr, MachinePointerInfo());
+  InChain = VAReg.getValue(1);
+
+  // va_ndx
+  SDValue VarArgIndexPtr =
+      DAG.getObjectPtrOffset(DL, VARegPtr, TypeSize::getFixed(4));
+  SDValue VAIndex =
+      DAG.getLoad(MVT::i32, DL, InChain, VarArgIndexPtr, MachinePointerInfo());
+  InChain = VAIndex.getValue(1);
+
+  SDValue OrigIndex = VAIndex;
+
+  if (ArgAlignInBytes > 4) {
+    OrigIndex = DAG.getNode(ISD::ADD, DL, PtrVT, OrigIndex,
+                            DAG.getConstant(ArgAlignInBytes - 1, DL, MVT::i32));
+    OrigIndex =
+        DAG.getNode(ISD::AND, DL, PtrVT, OrigIndex,
+                    DAG.getSignedConstant(-ArgAlignInBytes, DL, MVT::i32));
+  }
+
+  VAIndex = DAG.getNode(ISD::ADD, DL, PtrVT, OrigIndex,
+                        DAG.getConstant(VASizeInBytes, DL, MVT::i32));
+
+  SDValue CC = DAG.getSetCC(DL, MVT::i32, OrigIndex,
+                            DAG.getConstant(6 * 4, DL, MVT::i32), ISD::SETLE);
+
+  SDValue StkIndex =
+      DAG.getNode(ISD::ADD, DL, PtrVT, VAIndex,
+                  DAG.getConstant(32 + VASizeInBytes, DL, MVT::i32));
+
+  CC = DAG.getSetCC(DL, MVT::i32, VAIndex, DAG.getConstant(6 * 4, DL, MVT::i32),
+                    ISD::SETLE);
+
+  SDValue Array = DAG.getNode(ISD::SELECT, DL, MVT::i32, CC, VAReg, VAStack);
+
+  VAIndex = DAG.getNode(ISD::SELECT, DL, MVT::i32, CC, VAIndex, StkIndex);
+
+  CC = DAG.getSetCC(DL, MVT::i32, VAIndex, DAG.getConstant(6 * 4, DL, MVT::i32),
+                    ISD::SETLE);
+
+  SDValue VAIndexStore = DAG.getStore(InChain, DL, VAIndex, VarArgIndexPtr,
+                                      MachinePointerInfo(SV));
+  InChain = VAIndexStore;
+
+  SDValue Addr = DAG.getNode(ISD::SUB, DL, PtrVT, VAIndex,
+                             DAG.getConstant(VASizeInBytes, DL, MVT::i32));
+
+  Addr = DAG.getNode(ISD::ADD, DL, PtrVT, Array, Addr);
+
+  return DAG.getLoad(VT, DL, InChain, Addr, MachinePointerInfo());
 }
 
 SDValue XtensaTargetLowering::LowerShiftLeftParts(SDValue Op,
@@ -1990,7 +2060,7 @@ SDValue XtensaTargetLowering::LowerShiftLeftParts(SDValue Op,
   //   Lo = 0
   //   Hi = Lo << (Shamt - register size)
 
-  SDValue MinusRegisterSize = DAG.getConstant(-32, DL, VT);
+  SDValue MinusRegisterSize = DAG.getSignedConstant(-32, DL, VT);
   SDValue ShamtMinusRegisterSize =
       DAG.getNode(ISD::ADD, DL, VT, Shamt, MinusRegisterSize);
 
@@ -2031,7 +2101,7 @@ SDValue XtensaTargetLowering::LowerShiftRightParts(SDValue Op,
   //     Hi = 0;
 
   unsigned ShiftRightOp = IsSRA ? ISD::SRA : ISD::SRL;
-  SDValue MinusRegisterSize = DAG.getConstant(-32, DL, VT);
+  SDValue MinusRegisterSize = DAG.getSignedConstant(-32, DL, VT);
   SDValue RegisterSizeMinus1 = DAG.getConstant(32 - 1, DL, VT);
   SDValue ShamtMinusRegisterSize =
       DAG.getNode(ISD::ADD, DL, VT, Shamt, MinusRegisterSize);
@@ -2087,6 +2157,38 @@ bool XtensaTargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
     return true;
 
   return false;
+}
+
+SDValue XtensaTargetLowering::LowerMUL(SDValue Op, SelectionDAG &DAG) const {
+  EVT VT = Op->getValueType(0);
+  SDLoc DL(Op);
+
+  if (VT != MVT::i32)
+    return SDValue();
+
+  ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op->getOperand(1));
+  if (!C)
+    return SDValue();
+
+  int64_t MulAmt = C->getSExtValue();
+  unsigned ShiftAmt = 0;
+
+  switch (MulAmt) {
+  case 2:
+    ShiftAmt = 1;
+    break;
+  case 4:
+    ShiftAmt = 2;
+    break;
+  case 8:
+    ShiftAmt = 3;
+    break;
+  default:
+    return SDValue();
+  }
+
+  return DAG.getNode(ISD::SHL, DL, VT, Op->getOperand(0),
+                     DAG.getConstant(ShiftAmt, DL, VT));
 }
 
 SDValue XtensaTargetLowering::LowerFunnelShift(SDValue Op,
@@ -2158,6 +2260,8 @@ SDValue XtensaTargetLowering::LowerOperation(SDValue Op,
     return LowerDYNAMIC_STACKALLOC(Op, DAG);
   case ISD::VASTART:
     return LowerVASTART(Op, DAG);
+  case ISD::VAARG:
+    return LowerVAARG(Op, DAG);
   case ISD::VACOPY:
     return LowerVACOPY(Op, DAG);
   case ISD::ATOMIC_FENCE:
@@ -3419,11 +3523,6 @@ MachineBasicBlock *XtensaTargetLowering::EmitInstrWithCustomInserter(
     return MBB;
   }
 
-  case Xtensa::SELECT_CC_FP_FP:
-  case Xtensa::SELECT_CC_FP_INT:
-  case Xtensa::SELECT_CC_INT_FP:
-  case Xtensa::SELECT:
-    return emitSelectCC(MI, MBB);
   case Xtensa::L8I_P: {
     MachineOperand &R = MI.getOperand(0);
     MachineOperand &Op1 = MI.getOperand(1);
@@ -3454,7 +3553,6 @@ MachineBasicBlock *XtensaTargetLowering::EmitInstrWithCustomInserter(
     MI.eraseFromParent();
     return MBB;
   }
-
   case Xtensa::ATOMIC_CMP_SWAP_8_P: {
     return emitAtomicCmpSwap(MI, MBB, 1);
   }
@@ -3492,7 +3590,6 @@ MachineBasicBlock *XtensaTargetLowering::EmitInstrWithCustomInserter(
   case Xtensa::ATOMIC_SWAP_32_P: {
     return emitAtomicSwap(MI, MBB);
   }
-
   case Xtensa::ATOMIC_LOAD_ADD_8_P:
     return emitAtomicRMW(MI, MBB, true, Xtensa::ADD, false, false);
   case Xtensa::ATOMIC_LOAD_SUB_8_P:
@@ -3555,7 +3652,11 @@ MachineBasicBlock *XtensaTargetLowering::EmitInstrWithCustomInserter(
     return emitAtomicRMW(MI, MBB, Xtensa::BGEU, false, true);
   case Xtensa::ATOMIC_LOAD_UMAX_32_P:
     return emitAtomicRMW(MI, MBB, Xtensa::BLTU, false, true);
-
+  case Xtensa::SELECT_CC_FP_FP:
+  case Xtensa::SELECT_CC_FP_INT:
+  case Xtensa::SELECT_CC_INT_FP:
+  case Xtensa::SELECT:
+    return emitSelectCC(MI, MBB);
   case Xtensa::S8I:
   case Xtensa::S16I:
   case Xtensa::S32I:

@@ -272,6 +272,11 @@ uint32_t XtensaMCCodeEmitter::getBranchTargetEncoding(
     Fixups.push_back(MCFixup::create(
         0, Expr, MCFixupKind(Xtensa::fixup_xtensa_branch_12), MI.getLoc()));
     return 0;
+  case Xtensa::BEQZ_N:
+  case Xtensa::BNEZ_N:
+    Fixups.push_back(MCFixup::create(
+        0, Expr, MCFixupKind(Xtensa::fixup_xtensa_branch_6), MI.getLoc()));
+    return 0;
   default:
     Fixups.push_back(MCFixup::create(
         0, Expr, MCFixupKind(Xtensa::fixup_xtensa_branch_8), MI.getLoc()));

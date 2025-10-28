@@ -103,6 +103,9 @@ void XtensaAsmPrinter::emitMachineConstantPoolValue(
     const BlockAddress *BA =
         cast<XtensaConstantPoolConstant>(ACPV)->getBlockAddress();
     MCSym = GetBlockAddressSymbol(BA);
+  } else if (ACPV->isMachineBasicBlock()) {
+    const MachineBasicBlock *MBB = cast<XtensaConstantPoolMBB>(ACPV)->getMBB();
+    MCSym = MBB->getSymbol();
   } else if (ACPV->isJumpTable()) {
     unsigned Idx = cast<XtensaConstantPoolJumpTable>(ACPV)->getIndex();
     MCSym = this->GetJTISymbol(Idx, false);
@@ -171,6 +174,10 @@ void XtensaAsmPrinter::emitMachineConstantPoolEntry(
 // used to print out constants which have been "spilled to memory" by
 // the code generator.
 void XtensaAsmPrinter::emitConstantPool() {
+  auto *ST = &MF->getSubtarget<XtensaSubtarget>();
+  if (ST->useTextSectionLiterals())
+    return;
+
   const Function &F = MF->getFunction();
   const MachineConstantPool *MCP = MF->getConstantPool();
   const std::vector<MachineConstantPoolEntry> &CP = MCP->getConstants();
@@ -200,7 +207,7 @@ void XtensaAsmPrinter::printOperand(const MachineInstr *MI, int OpNo,
   switch (MO.getType()) {
   case MachineOperand::MO_Register:
   case MachineOperand::MO_Immediate: {
-    MCOperand MC(lowerOperand(MI->getOperand(OpNo)));
+    MCOperand MC = lowerOperand(MI->getOperand(OpNo));
     XtensaInstPrinter::printOperand(MC, O);
     break;
   }
@@ -208,24 +215,20 @@ void XtensaAsmPrinter::printOperand(const MachineInstr *MI, int OpNo,
     O << *getSymbol(MO.getGlobal());
     break;
   default:
-    llvm_unreachable("<unknown operand type>");
-  }
-
-  if (MO.getTargetFlags()) {
-    O << ")";
+    llvm_unreachable("unknown operand type");
   }
 }
 
 bool XtensaAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                                        const char *ExtraCode, raw_ostream &O) {
-  if (ExtraCode && *ExtraCode == 'n') {
-    if (!MI->getOperand(OpNo).isImm())
-      return true;
-    O << -int64_t(MI->getOperand(OpNo).getImm());
-  } else {
+  // Print the operand if there is no operand modifier.
+  if (!ExtraCode || !ExtraCode[0]) {
     printOperand(MI, OpNo, O);
+    return false;
   }
-  return false;
+
+  // Fallback to the default implementation.
+  return AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, O);
 }
 
 bool XtensaAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,

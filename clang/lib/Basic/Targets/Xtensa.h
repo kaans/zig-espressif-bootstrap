@@ -18,6 +18,7 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/TargetParser/Triple.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/TargetParser/XtensaTargetParser.h"
@@ -30,6 +31,7 @@ namespace clang {
 namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY XtensaTargetInfo : public TargetInfo {
+
 protected:
   std::string CPU;
   bool HasFP = false;
@@ -66,6 +68,7 @@ protected:
 public:
   XtensaTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
+    // no big-endianess support yet
     BigEndian = false;
     NoAsmVariants = true;
     LongLongAlign = 64;
@@ -87,7 +90,6 @@ public:
   ArrayRef<Builtin::Info> getTargetBuiltins() const override;
 
   BuiltinVaListKind getBuiltinVaListKind() const override {
-
     return TargetInfo::XtensaABIBuiltinVaList;
   }
 

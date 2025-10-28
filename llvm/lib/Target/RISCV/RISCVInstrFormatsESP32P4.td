@@ -12,7 +12,7 @@
 
 class Esp32P4Inst<dag outs, dag ins, string asmstr, list<dag> pattern,
                  InstrItinClass itin = NoItinerary> 
-  : Instruction, Requires<[HasVendorESP32P4]> {
+  : Instruction, Requires<[HasVendorXesppie]> {
   let Namespace = "RISCV";
   let DecoderNamespace = "ESP32P4";
   field bits<32> Inst;

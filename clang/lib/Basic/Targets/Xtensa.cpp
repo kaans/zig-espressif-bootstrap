@@ -42,6 +42,10 @@ void XtensaTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__XTENSA_EB__");
   else
     Builder.defineMacro("__XTENSA_EL__");
+  Builder.defineMacro("__XCHAL_HAVE_BE", BigEndian ? "1" : "0");
+  Builder.defineMacro("__XCHAL_HAVE_ABS");  // core arch
+  Builder.defineMacro("__XCHAL_HAVE_ADDX"); // core arch
+  Builder.defineMacro("__XCHAL_HAVE_L32R"); // core arch
   if (HasWindowed)
     Builder.defineMacro("__XTENSA_WINDOWED_ABI__");
   else
