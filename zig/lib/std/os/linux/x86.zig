@@ -18,8 +18,7 @@ pub fn syscall0(number: SYS) usize {
     return asm volatile ("int $0x80"
         : [ret] "={eax}" (-> usize),
         : [number] "{eax}" (@intFromEnum(number)),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn syscall1(number: SYS, arg1: usize) usize {
@@ -27,8 +26,7 @@ pub fn syscall1(number: SYS, arg1: usize) usize {
         : [ret] "={eax}" (-> usize),
         : [number] "{eax}" (@intFromEnum(number)),
           [arg1] "{ebx}" (arg1),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn syscall2(number: SYS, arg1: usize, arg2: usize) usize {
@@ -37,8 +35,7 @@ pub fn syscall2(number: SYS, arg1: usize, arg2: usize) usize {
         : [number] "{eax}" (@intFromEnum(number)),
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn syscall3(number: SYS, arg1: usize, arg2: usize, arg3: usize) usize {
@@ -48,8 +45,7 @@ pub fn syscall3(number: SYS, arg1: usize, arg2: usize, arg3: usize) usize {
           [arg1] "{ebx}" (arg1),
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn syscall4(number: SYS, arg1: usize, arg2: usize, arg3: usize, arg4: usize) usize {
@@ -60,8 +56,7 @@ pub fn syscall4(number: SYS, arg1: usize, arg2: usize, arg3: usize, arg4: usize)
           [arg2] "{ecx}" (arg2),
           [arg3] "{edx}" (arg3),
           [arg4] "{esi}" (arg4),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn syscall5(number: SYS, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) usize {
@@ -73,8 +68,7 @@ pub fn syscall5(number: SYS, arg1: usize, arg2: usize, arg3: usize, arg4: usize,
           [arg3] "{edx}" (arg3),
           [arg4] "{esi}" (arg4),
           [arg5] "{edi}" (arg5),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn syscall6(
@@ -108,8 +102,7 @@ pub fn syscall6(
           [arg4] "{esi}" (arg4),
           [arg5] "rm" (arg5),
           [arg6] "rm" (arg6),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn socketcall(call: usize, args: [*]const usize) usize {
@@ -118,8 +111,7 @@ pub fn socketcall(call: usize, args: [*]const usize) usize {
         : [number] "{eax}" (@intFromEnum(SYS.socketcall)),
           [arg1] "{ebx}" (call),
           [arg2] "{ecx}" (@intFromPtr(args)),
-        : "memory"
-    );
+        : .{ .memory = true });
 }
 
 pub fn clone() callconv(.naked) usize {
@@ -179,14 +171,12 @@ pub fn restore() callconv(.naked) noreturn {
             \\ int $0x80
             :
             : [number] "i" (@intFromEnum(SYS.sigreturn)),
-            : "memory"
-        ),
+            : .{ .memory = true }),
         else => asm volatile (
             \\ int $0x80
             :
             : [number] "{eax}" (@intFromEnum(SYS.sigreturn)),
-            : "memory"
-        ),
+            : .{ .memory = true }),
     }
 }
 
@@ -197,14 +187,12 @@ pub fn restore_rt() callconv(.naked) noreturn {
             \\ int $0x80
             :
             : [number] "i" (@intFromEnum(SYS.rt_sigreturn)),
-            : "memory"
-        ),
+            : .{ .memory = true }),
         else => asm volatile (
             \\ int $0x80
             :
             : [number] "{eax}" (@intFromEnum(SYS.rt_sigreturn)),
-            : "memory"
-        ),
+            : .{ .memory = true }),
     }
 }
 
@@ -230,8 +218,6 @@ pub const F = struct {
     pub const UNLCK = 2;
 };
 
-pub const MMAP2_UNIT = 4096;
-
 pub const VDSO = struct {
     pub const CGT_SYM = "__vdso_clock_gettime";
     pub const CGT_VER = "LINUX_2.6";
@@ -245,26 +231,6 @@ pub const Flock = extern struct {
     start: off_t,
     len: off_t,
     pid: pid_t,
-};
-
-pub const msghdr = extern struct {
-    name: ?*sockaddr,
-    namelen: socklen_t,
-    iov: [*]iovec,
-    iovlen: i32,
-    control: ?*anyopaque,
-    controllen: socklen_t,
-    flags: i32,
-};
-
-pub const msghdr_const = extern struct {
-    name: ?*const sockaddr,
-    namelen: socklen_t,
-    iov: [*]const iovec_const,
-    iovlen: i32,
-    control: ?*const anyopaque,
-    controllen: socklen_t,
-    flags: i32,
 };
 
 pub const blksize_t = i32;
@@ -352,7 +318,7 @@ pub const ucontext_t = extern struct {
     link: ?*ucontext_t,
     stack: stack_t,
     mcontext: mcontext_t,
-    sigmask: sigset_t,
+    sigmask: [1024 / @bitSizeOf(c_ulong)]c_ulong, // Currently a libc-compatible (1024-bit) sigmask
     regspace: [64]u64,
 };
 
@@ -464,8 +430,7 @@ pub fn getContextInternal() callconv(.naked) usize {
           [sigprocmask] "i" (@intFromEnum(linux.SYS.rt_sigprocmask)),
           [sigmask_offset] "i" (@offsetOf(ucontext_t, "sigmask")),
           [sigset_size] "i" (linux.NSIG / 8),
-        : "cc", "memory", "eax", "ecx", "edx"
-    );
+        : .{ .cc = true, .memory = true, .eax = true, .ecx = true, .edx = true });
 }
 
 pub inline fn getcontext(context: *ucontext_t) usize {
@@ -479,6 +444,5 @@ pub inline fn getcontext(context: *ucontext_t) usize {
           [_] "={edx}" (clobber_edx),
         : [_] "{edx}" (context),
           [getContextInternal] "X" (&getContextInternal),
-        : "cc", "memory", "ecx"
-    );
+        : .{ .cc = true, .memory = true, .ecx = true });
 }
